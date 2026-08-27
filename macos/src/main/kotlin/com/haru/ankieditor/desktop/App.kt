@@ -175,6 +175,9 @@ fun App(
         if (editing) {
             onMaximumWindowWidth(null)
         } else {
+            // 閉じる際のウインドウ縮小（280ms）が完了してから上限を戻す。
+            // 先に上限を戻すと、最大幅処理が開閉アニメーションを横取りする。
+            delay(320)
             val listPart = if (listVisible) listWidth.value + 10f else 0f
             onMaximumWindowWidth(listPart + previewMaxWidth.value)
         }
@@ -653,7 +656,9 @@ fun App(
                 val rightAvailable = (total - shownListWidth - if (listVisible) 10.dp else 0.dp)
                     .coerceAtLeast(previewMinWidth)
                 val nonEditingPreview = rightAvailable.coerceIn(previewMinWidth, previewMaxWidth)
-                if (!editing) {
+                // editing は閉じる操作の開始時点で false になるが、editorShown は
+                // 0 までアニメーションする。完全に閉じるまで現在幅を更新しない。
+                if (!editing && editorShown < 0.001f) {
                     SideEffect {
                         previewWidth = nonEditingPreview
                         prefs.previewWidth = nonEditingPreview.value
