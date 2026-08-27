@@ -57,6 +57,8 @@ import kotlinx.coroutines.withContext
 
 /** カードの地色。WebView の初期描画で黒が見えないように敷いておく */
 val CARD_BACKGROUND = Color(0xFFFFFFFF)
+private const val PREVIEW_MIN_WIDTH_DP = 600f
+private const val EDITOR_MIN_WIDTH_DP = 320f
 
 /** タグの先頭絵文字とテキストの間に半角スペースを入れる */
 fun formatTag(tag: String): String {
@@ -85,7 +87,6 @@ fun App(
     repo: DesktopRepo,
     prefs: Prefs,
     server: MediaServer,
-    windowResizing: Boolean = false,
     onMinimumWindowWidth: (Float) -> Unit = {},
 ) {
     val scope = rememberCoroutineScope()
@@ -153,8 +154,8 @@ fun App(
         // プレビュー 600dp + 操作可能な編集欄 320dp を常に先取りする。
         // これにより live resize 中にも Chromium が編集欄へ重なる幅にならない。
         val listPart = if (listVisible) listWidth.value + 10f else 0f
-        val editorPart = if (editing) 320f + 10f else 0f
-        onMinimumWindowWidth(listPart + 600f + editorPart)
+        val editorPart = if (editing) EDITOR_MIN_WIDTH_DP + 10f else 0f
+        onMinimumWindowWidth(listPart + PREVIEW_MIN_WIDTH_DP + editorPart)
     }
 
     fun currentQuery(): String = buildList {
@@ -586,7 +587,7 @@ fun App(
                 if (listVisible) SplitHandle { delta ->
                     val moved = actualListWidth + with(density) { delta.toDp() }
                     // ドラッグ中だけ、現在のウインドウ内にプレビューを残す上限を適用する。
-                    val previewFloor = with(density) { 600.toDp() } + if (editing) editorWidth else 0.dp
+                    val previewFloor = PREVIEW_MIN_WIDTH_DP.dp + if (editing) editorWidth else 0.dp
                     val listMax = (total - previewFloor - 20.dp).coerceAtLeast(220.dp)
                     listWidth = moved.coerceIn(220.dp, listMax)
                     prefs.listWidth = listWidth.value
@@ -621,15 +622,16 @@ fun App(
                             covered = showSettings || showLogin || showAddNote ||
                                 deleteTarget != null || fullSyncPrompt != null ||
                                 conflicts.isNotEmpty(),
-                            windowResizing = windowResizing,
+                            statusMessage = message,
+                            syncing = syncing,
                             modifier = Modifier.fillMaxSize(),
                         )
                     }
                     // いまのウインドウ幅で編集列に使える上限。
                     // プレビューの最低幅 (600px) を先に確保する。
                     val editorRoom =
-                        (total - actualListWidth - with(density) { 600.toDp() } - 20.dp)
-                            .coerceAtLeast(320.dp)
+                        (total - actualListWidth - PREVIEW_MIN_WIDTH_DP.dp - 20.dp)
+                            .coerceAtLeast(EDITOR_MIN_WIDTH_DP.dp)
                     // 保存幅を優先しつつ、プレビュー最低幅を侵食する場合だけ編集欄を縮める。
                     val effectiveEditorWidth = editorWidth.coerceAtMost(editorRoom)
                     if (editorShown > 0.001f) {
@@ -637,9 +639,9 @@ fun App(
                             val moved = editorWidth - with(density) { delta.toDp() }
                             // 編集列を広げても、プレビューは 250dp を残す
                             val editorMax =
-                                (total - actualListWidth - with(density) { 600.toDp() } - 20.dp)
-                                    .coerceAtLeast(320.dp)
-                            editorWidth = moved.coerceIn(320.dp, editorMax)
+                                (total - actualListWidth - PREVIEW_MIN_WIDTH_DP.dp - 20.dp)
+                                    .coerceAtLeast(EDITOR_MIN_WIDTH_DP.dp)
+                            editorWidth = moved.coerceIn(EDITOR_MIN_WIDTH_DP.dp, editorMax)
                             prefs.editorWidth = editorWidth.value
                         }
                         Box(
@@ -670,42 +672,6 @@ fun App(
         }
     }
 
-    // ---- 進み具合の知らせ (画面の右上に静かに出る) ----
-    Box(Modifier.fillMaxSize().padding(top = 34.dp), contentAlignment = Alignment.TopEnd) {
-        AnimatedVisibility(
-            visible = message != null,
-            enter = fadeIn(tween(180)) + slideInVertically { -it / 2 },
-            exit = fadeOut(tween(160)) + slideOutVertically { -it / 2 },
-        ) {
-            Surface(
-                shape = MacShapes.pill,
-                color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                tonalElevation = 2.dp,
-                shadowElevation = 8.dp,
-                modifier = Modifier.padding(top = 12.dp, end = 16.dp),
-            ) {
-                Row(
-                    Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    if (syncing) {
-                        CircularProgressIndicator(
-                            Modifier.size(13.dp),
-                            strokeWidth = 1.6.dp,
-                            color = MaterialTheme.colorScheme.primary,
-                        )
-                        Spacer(Modifier.width(9.dp))
-                    }
-                    Text(
-                        message.orEmpty(),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1,
-                    )
-                }
-            }
-        }
-    }
     }
 
     if (showSettings) {

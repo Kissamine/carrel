@@ -122,40 +122,54 @@ fun EditorPane(
 
     Column(modifier) {
         // ---- ヘッダー ----
-        Row(
-            // ウインドウの縁との余白を、左の検索列と同じ間隔にそろえる
-            Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 12.dp).height(40.dp),
-            verticalAlignment = Alignment.CenterVertically,
+        BoxWithConstraints(
+            Modifier.fillMaxWidth().padding(start = 12.dp, end = 8.dp, top = 12.dp).height(40.dp),
         ) {
-            SingleChoiceSegmentedButtonRow(Modifier.height(TOOLBAR_ITEM_HEIGHT)) {
-                EditorMode.entries.forEachIndexed { index, m ->
-                    SegmentedButton(
-                        selected = mode == m,
-                        onClick = { onModeChange(m) },
-                        shape = SegmentedButtonDefaults.itemShape(index, EditorMode.entries.size),
-                        icon = {},
-                        label = {
-                            Text(
-                                m.label,
-                                style = MaterialTheme.typography.labelMedium,
-                                maxLines = 1,
-                                modifier = Modifier.padding(horizontal = 6.dp),
-                            )
-                        },
-                    )
+            val compactHeader = maxWidth < 430.dp
+            Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
+                // 左側だけを可変幅にし、保存・閉じるは必ず右端に確保する。
+                SingleChoiceSegmentedButtonRow(
+                    Modifier.weight(1f).height(TOOLBAR_ITEM_HEIGHT),
+                ) {
+                    EditorMode.entries.forEachIndexed { index, m ->
+                        SegmentedButton(
+                            selected = mode == m,
+                            onClick = { onModeChange(m) },
+                            shape = SegmentedButtonDefaults.itemShape(index, EditorMode.entries.size),
+                            icon = {},
+                            label = {
+                                Text(
+                                    m.label,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    maxLines = 1,
+                                    modifier = Modifier.padding(horizontal = if (compactHeader) 1.dp else 6.dp),
+                                )
+                            },
+                        )
+                    }
+                }
+                Spacer(Modifier.width(6.dp))
+                if (saving) {
+                    CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                    Spacer(Modifier.width(6.dp))
+                }
+                if (compactHeader) {
+                    IconButton(
+                        onClick = onSave,
+                        enabled = dirty && !saving,
+                        modifier = Modifier.size(34.dp),
+                    ) { Icon(Icons.Default.Check, "保存", Modifier.size(17.dp)) }
+                } else {
+                    TextButton(onClick = onSave, enabled = dirty && !saving) {
+                        Icon(Icons.Default.Check, null, Modifier.size(16.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("保存")
+                    }
+                }
+                IconButton(onClick = onClose, modifier = Modifier.size(34.dp)) {
+                    Icon(Icons.Default.Close, "編集を終了", Modifier.size(18.dp))
                 }
             }
-            Spacer(Modifier.weight(1f))
-            if (saving) {
-                CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
-                Spacer(Modifier.width(8.dp))
-            }
-            TextButton(onClick = onSave, enabled = dirty && !saving) {
-                Icon(Icons.Default.Check, null, Modifier.size(16.dp))
-                Spacer(Modifier.width(4.dp))
-                Text("保存")
-            }
-            IconButton(onClick = onClose) { Icon(Icons.Default.Close, "編集を終了") }
         }
 
         // ---- 検索とメディア追加 ----

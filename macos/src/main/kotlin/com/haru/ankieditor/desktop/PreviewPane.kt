@@ -1,6 +1,12 @@
 package com.haru.ankieditor.desktop
 
 import androidx.compose.animation.*
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -18,7 +24,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import com.haru.ankieditor.AnkiNote
 
@@ -42,20 +50,18 @@ fun PreviewPane(
     findable: Boolean = false,
     /** 何かを前に出している間は、ページを引っ込める (ウインドウ描画のとき用) */
     covered: Boolean = false,
-    /** macOS のウインドウ端を掴んで live resize している間 */
-    windowResizing: Boolean = false,
+    statusMessage: String? = null,
+    syncing: Boolean = false,
     /** 一覧をしまっているときに戻すための操作 */
     onShowList: (() -> Unit)? = null,
     /** ⌘F が押された回数。増えたら検索バーを開く */
     findRequest: Int = 0,
 ) {
     val handle = rememberWebHandle()
-    val resizeHandle = rememberWebHandle()
     val loadedNote = remember { longArrayOf(-1L) }
     // ページはローカルサーバーから配る (画像や音声を相対の名前で読めるように)
     val pageName = remember(note?.id) { "__preview_${note?.id ?: 0}.html" }
-    val resizePageName = remember(note?.id) { "__preview_resize_${note?.id ?: 0}.html" }
-    var resizeReady by remember(note?.id) { mutableStateOf(false) }
+    var webReady by remember(note?.id) { mutableStateOf(false) }
 
     // ノートを選ぶまではカードの白地を出さず、アプリの地色のままにする
     val hasCard = note != null && html != null
@@ -79,56 +85,30 @@ fun PreviewPane(
 
     // 下地はカードの地色 (暗い方) に合わせる。白にすると幅を変えたときに白帯が見える
     val backdrop = MaterialTheme.colorScheme.surface
-    Box(modifier.background(backdrop)) {
-        // 表示するものが無いときは、ページの部品自体を置かない。
-        // 置いたままだと、その下地が画面を覆って Compose の表示が見えなくなる
-        var everShown by remember { mutableStateOf(false) }
-        LaunchedEffect(hasCard) { if (hasCard) everShown = true }
-        val showWeb = (hasCard || everShown) && !covered
-        val usingResizePreview = windowResizing && resizeReady
-        // ネイティブ NSView は AppKit の live resize 中に Compose より一拍遅れて
-        // 古い枠へ描くため、隣の編集欄への重なりや白い未描画帯が発生する。
-        // 同じ Chromium の OSR 画面を常に背面に用意し、ドラッグ中だけこちらを見せる。
-        if (showWeb) WebPane(
-            handle = resizeHandle,
-            html = page,
-            background = backdrop,
-            modifier = Modifier.fillMaxSize(),
-            active = usingResizePreview,
-            onPageReady = {
-                resizeHandle.run(com.haru.ankieditor.PreviewFindJs.script)
-                // about:blank の初回完了ではなく、カード本体が描画可能になってから切替える。
-                if (resizeHandle.browser?.url?.contains(resizePageName) == true) {
-                    resizeReady = true
-                }
-            },
-            onHtmlChanged = { h, content ->
-                resizeReady = false
-                server.putPage(resizePageName, content)
-                h.loadHtml(server.baseUrl + resizePageName)
-            },
-            onBridge = { message ->
-                when (message) {
-                    "ui:add" -> onAdd?.invoke()
-                    "ui:edit" -> onEdit?.invoke()
-                    "ui:refresh" -> onRefresh?.invoke()
-                    "ui:showlist" -> onShowList?.invoke()
-                }
-            },
+    Box(modifier.background(backdrop).clipToBounds()) {
+        // 起動時から Chromium を作って待機させる。最初のカードを選んでから
+        // ブラウザを起動すると、カード生成時間に初期化時間まで加わってしまう。
+        val contentAlpha by animateFloatAsState(
+            targetValue = if (hasCard && webReady && !loading && !covered) 1f else 0f,
+            animationSpec = tween(180),
+            label = "previewFade",
         )
-
-        if (showWeb) NativeWebPane(
+        WebPane(
             handle = handle,
             html = page,
             background = backdrop,
-            modifier = Modifier.fillMaxSize(),
-            // ブラウザ自体は破棄せず、live resize 中だけ NSView を引っ込める。
-            // ドラッグ終了後は同じページ・スクロール位置のまま即座に復帰する。
-            visible = !usingResizePreview,
-            onPageReady = { handle.run(com.haru.ankieditor.PreviewFindJs.script) },
+            modifier = Modifier.fillMaxSize().graphicsLayer { alpha = contentAlpha },
+            active = true,
+            onPageReady = {
+                handle.run(com.haru.ankieditor.PreviewFindJs.script)
+                if (handle.browser?.url?.contains(pageName) == true) {
+                    webReady = true
+                }
+            },
             onHtmlChanged = { h, content ->
                 val id = note?.id ?: -1L
                 if (loadedNote[0] != id) {
+                    webReady = false
                     loadedNote[0] = id
                     h.loadedTag = content
                     server.putPage(pageName, content)
@@ -137,6 +117,7 @@ fun PreviewPane(
                     h.loadedTag = content
                     // 同じノートの再描画では本文だけ入れ替える (位置が戻らないように)
                     h.run(CardHtml.replaceBodyScript(content))
+                    webReady = true
                 }
             },
             onBridge = { message ->
@@ -149,33 +130,30 @@ fun PreviewPane(
             },
         )
 
-        // live resize の前後でスクロール位置を引き継ぐ。背面の表示が先頭に戻ったり、
-        // ドラッグ終了時に元の位置へ跳ねたりしないようにする。
-        LaunchedEffect(usingResizePreview, showWeb) {
-            if (!showWeb) return@LaunchedEffect
-            if (usingResizePreview) {
-                handle.run("JSON.stringify({x:scrollX,y:scrollY})") { raw ->
-                    val point = runCatching { org.json.JSONObject(raw?.toString().orEmpty()) }.getOrNull()
-                    val x = point?.optDouble("x", 0.0) ?: 0.0
-                    val y = point?.optDouble("y", 0.0) ?: 0.0
-                    resizeHandle.run("scrollTo($x,$y)")
-                }
-            } else {
-                resizeHandle.run("JSON.stringify({x:scrollX,y:scrollY})") { raw ->
-                    val point = runCatching { org.json.JSONObject(raw?.toString().orEmpty()) }.getOrNull()
-                    val x = point?.optDouble("x", 0.0) ?: 0.0
-                    val y = point?.optDouble("y", 0.0) ?: 0.0
-                    handle.run("scrollTo($x,$y)")
-                }
-            }
-        }
-
-        if (!hasCard) {
+        if (!hasCard && !loading) {
             Text(
                 "ノートを選ぶとここに実際のカードが表示されます",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.align(Alignment.Center),
             )
+        }
+
+        AnimatedVisibility(
+            visible = loading || (hasCard && !webReady),
+            enter = fadeIn(tween(120)),
+            exit = fadeOut(tween(180)),
+            modifier = Modifier.align(Alignment.Center),
+        ) {
+            Surface(
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = .94f),
+                shadowElevation = 8.dp,
+                modifier = Modifier.size(48.dp),
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
+                }
+            }
         }
 
         // カードが出ていないときは、ページ側のボタンが無いのでこちらに出す
@@ -203,10 +181,45 @@ fun PreviewPane(
             if (findRequest > 0) handle.run("window.__ankiFindOpen && window.__ankiFindOpen()")
         }
 
-        if (loading) {
-            LinearProgressIndicator(
-                Modifier.align(Alignment.TopCenter).fillMaxWidth().height(2.dp)
-            )
+        PreviewStatus(statusMessage, syncing, Modifier.align(Alignment.BottomCenter))
+    }
+}
+
+@Composable
+private fun PreviewStatus(message: String?, syncing: Boolean, modifier: Modifier = Modifier) {
+    val transition = rememberInfiniteTransition(label = "syncRotation")
+    val rotation by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(tween(900, easing = LinearEasing)),
+        label = "syncRotation",
+    )
+    AnimatedVisibility(
+        visible = message != null,
+        enter = fadeIn(tween(180)) + slideInVertically { it / 2 },
+        exit = fadeOut(tween(160)) + slideOutVertically { it / 2 },
+        modifier = modifier.padding(bottom = 22.dp),
+    ) {
+        Surface(
+            shape = RoundedCornerShape(50),
+            color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = .96f),
+            shadowElevation = 8.dp,
+        ) {
+            Row(
+                Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (syncing) {
+                    Icon(
+                        Icons.Default.Refresh,
+                        null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(16.dp).graphicsLayer { rotationZ = rotation },
+                    )
+                    Spacer(Modifier.width(9.dp))
+                }
+                Text(message.orEmpty(), style = MaterialTheme.typography.labelMedium, maxLines = 1)
+            }
         }
     }
 }

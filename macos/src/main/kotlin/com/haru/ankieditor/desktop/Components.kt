@@ -1,6 +1,11 @@
 package com.haru.ankieditor.desktop
 
 import androidx.compose.animation.*
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.*
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.gestures.Orientation
@@ -26,6 +31,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.text.font.FontWeight
@@ -55,6 +61,13 @@ fun SearchControls(
     syncing: Boolean,
     onHideList: () -> Unit = {},
 ) {
+    val syncTransition = rememberInfiniteTransition(label = "searchSyncRotation")
+    val syncRotation by syncTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(tween(900, easing = LinearEasing)),
+        label = "searchSyncRotation",
+    )
     Column(Modifier.padding(start = 10.dp, end = 6.dp, top = 8.dp, bottom = 4.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             val interaction = remember { MutableInteractionSource() }
@@ -108,7 +121,15 @@ fun SearchControls(
                 )
             }
             Spacer(Modifier.width(2.dp))
-            TooltipIconButton("同期", Icons.Default.Sync, enabled = !syncing, onClick = onSync)
+            TooltipIconButton(
+                "同期",
+                Icons.Default.Sync,
+                enabled = !syncing,
+                iconModifier = Modifier.graphicsLayer {
+                    rotationZ = if (syncing) syncRotation else 0f
+                },
+                onClick = onSync,
+            )
             TooltipIconButton("設定", Icons.Default.Settings, onClick = onSettings)
             TooltipIconButton(
                 "一覧をしまう",
@@ -326,6 +347,7 @@ fun TooltipIconButton(
     label: String,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     enabled: Boolean = true,
+    iconModifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
     TooltipBox(
@@ -334,7 +356,7 @@ fun TooltipIconButton(
         state = rememberTooltipState(),
     ) {
         IconButton(onClick = onClick, enabled = enabled, modifier = Modifier.size(38.dp)) {
-            Icon(icon, contentDescription = label, modifier = Modifier.size(20.dp))
+            Icon(icon, contentDescription = label, modifier = iconModifier.size(20.dp))
         }
     }
 }
