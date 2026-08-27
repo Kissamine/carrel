@@ -33,12 +33,15 @@ fun NativeWebPane(
     modifier: Modifier = Modifier,
     /** 設定などを前に出したいときは false。本物の部品は Compose の上に出てしまうため */
     visible: Boolean = true,
+    /** 編集中はウインドウ端を動かしてもプレビュー幅を変えず、右側だけを伸縮する */
+    lockWidthDuringWindowResize: Boolean = false,
     onPageReady: () -> Unit = {},
     onHtmlChanged: (WebHandle, String) -> Unit = { h, url -> h.loadHtml(url) },
     onBridge: (String) -> Unit = {},
 ) {
     val ready = rememberUpdatedState(onPageReady)
     val bridge = rememberUpdatedState(onBridge)
+    val lockWidth = rememberUpdatedState(lockWidthDuringWindowResize)
     // 広げた瞬間に空白が見えないよう、下地の色をカードと同じにしておく
     var browserForLayout by remember { mutableStateOf<CefBrowser?>(null) }
     val container = remember {
@@ -179,11 +182,13 @@ fun NativeWebPane(
         var lastWindowHeight = 0
         var resizeRightInset: Int? = null
         var resizeBottomInset: Int? = null
+        var resizeStartWidth: Int? = null
         // componentResized には「ドラッグ終了」の通知がないため、短い無通信時間を
         // live resize の終了として扱う。ドラッグ中は右側の幅を絶対に取り直さない。
         val resizeEndTimer = Timer(180) {
             resizeRightInset = null
             resizeBottomInset = null
+            resizeStartWidth = null
             val window = hostWindow
             val content = (window as? javax.swing.RootPaneContainer)?.contentPane
             if (content != null) {
@@ -211,7 +216,13 @@ fun NativeWebPane(
                 val bottomInset = resizeBottomInset ?: (lastWindowHeight - point.y - container.height)
                     .coerceAtLeast(0)
                     .also { resizeBottomInset = it }
-                val targetWidth = (content.width - point.x - rightInset).coerceAtLeast(1)
+                val startWidth = resizeStartWidth ?: container.width.coerceAtLeast(1)
+                    .also { resizeStartWidth = it }
+                val targetWidth = if (lockWidth.value) {
+                    startWidth
+                } else {
+                    (content.width - point.x - rightInset).coerceAtLeast(1)
+                }
                 val targetHeight = (content.height - point.y - bottomInset).coerceAtLeast(1)
 
                 container.setSize(targetWidth, targetHeight)

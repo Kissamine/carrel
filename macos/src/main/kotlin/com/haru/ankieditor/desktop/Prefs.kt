@@ -76,6 +76,19 @@ class Prefs {
         get() = store.getFloat("editorWidth", 520f)
         set(v) = store.putFloat("editorWidth", v)
 
+    /** プレビュー幅と、ユーザーが指定した可動範囲 (dp) */
+    var previewWidth: Float
+        get() = store.getFloat("previewWidth", 720f)
+        set(v) = store.putFloat("previewWidth", v)
+
+    var previewMinWidth: Float
+        get() = store.getFloat("previewMinWidth", 300f)
+        set(v) = store.putFloat("previewMinWidth", v)
+
+    var previewMaxWidth: Float
+        get() = store.getFloat("previewMaxWidth", 1100f)
+        set(v) = store.putFloat("previewMaxWidth", v)
+
     var textZoom: Int
         get() = store.getInt("textZoom", 100)
         set(v) = store.putInt("textZoom", v)

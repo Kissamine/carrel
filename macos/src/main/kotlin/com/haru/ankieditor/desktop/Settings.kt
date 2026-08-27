@@ -42,6 +42,7 @@ fun SettingsDialog(
     onOpenLogin: () -> Unit,
     onMessage: (String) -> Unit,
     onRefreshMeta: () -> Unit,
+    onPreviewBoundsChanged: (Float, Float) -> Unit = { _, _ -> },
     onDismiss: () -> Unit,
 ) {
     var defaultDeck by remember { mutableStateOf(prefs.defaultDeck) }
@@ -49,6 +50,8 @@ fun SettingsDialog(
     var editorMode by remember { mutableStateOf(prefs.editorMode) }
     var imageCorner by remember { mutableStateOf(prefs.imageCorner) }
     var textZoom by remember { mutableStateOf(prefs.textZoom) }
+    var previewMin by remember { mutableStateOf(prefs.previewMinWidth.toInt().toString()) }
+    var previewMax by remember { mutableStateOf(prefs.previewMaxWidth.toInt().toString()) }
 
     // 画面全体を薄暗くして、中央にパネルを浮かせる (Claude のデスクトップ版と同じ出し方)
     Box(
@@ -202,6 +205,47 @@ fun SettingsDialog(
                         }
 
                         SettingsSection.APPEARANCE -> {
+                            SettingsLabel(
+                                "プレビューの幅",
+                                "境界ドラッグとウインドウ変更の両方に適用します（dp）",
+                            )
+                            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                OutlinedTextField(
+                                    value = previewMin,
+                                    onValueChange = { value ->
+                                        previewMin = value.filter(Char::isDigit).take(4)
+                                        previewMin.toFloatOrNull()?.let { min ->
+                                            val fixed = min.coerceIn(220f, 1400f)
+                                            prefs.previewMinWidth = fixed
+                                            if (prefs.previewMaxWidth < fixed) {
+                                                prefs.previewMaxWidth = fixed
+                                                previewMax = fixed.toInt().toString()
+                                            }
+                                            onPreviewBoundsChanged(fixed, prefs.previewMaxWidth)
+                                        }
+                                    },
+                                    label = { Text("最小幅") },
+                                    suffix = { Text("dp") },
+                                    singleLine = true,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                OutlinedTextField(
+                                    value = previewMax,
+                                    onValueChange = { value ->
+                                        previewMax = value.filter(Char::isDigit).take(4)
+                                        previewMax.toFloatOrNull()?.let { max ->
+                                            val fixed = max.coerceIn(prefs.previewMinWidth, 2400f)
+                                            prefs.previewMaxWidth = fixed
+                                            onPreviewBoundsChanged(prefs.previewMinWidth, fixed)
+                                        }
+                                    },
+                                    label = { Text("最大幅") },
+                                    suffix = { Text("dp") },
+                                    singleLine = true,
+                                    modifier = Modifier.weight(1f),
+                                )
+                            }
+                            Spacer(Modifier.height(18.dp))
                             SettingsLabel(
                                 "プレビューの文字サイズ",
                                 "カードの表示だけに効きます",

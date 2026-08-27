@@ -51,6 +51,7 @@ fun PreviewPane(
     covered: Boolean = false,
     statusMessage: String? = null,
     syncing: Boolean = false,
+    lockWidthDuringWindowResize: Boolean = false,
     /** 一覧をしまっているときに戻すための操作 */
     onShowList: (() -> Unit)? = null,
     /** ⌘F が押された回数。増えたら検索バーを開く */
@@ -93,6 +94,7 @@ fun PreviewPane(
             background = backdrop,
             modifier = Modifier.fillMaxSize(),
             visible = hasCard && webReady && !loading && !covered,
+            lockWidthDuringWindowResize = lockWidthDuringWindowResize,
             onPageReady = {
                 handle.run(com.haru.ankieditor.PreviewFindJs.script)
                 if (handle.browser?.url?.contains(pageName) == true) {

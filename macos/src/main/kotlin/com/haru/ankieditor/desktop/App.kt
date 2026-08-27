@@ -57,7 +57,6 @@ import kotlinx.coroutines.withContext
 
 /** カードの地色。WebView の初期描画で黒が見えないように敷いておく */
 val CARD_BACKGROUND = Color(0xFFFFFFFF)
-private const val PREVIEW_MIN_WIDTH_DP = 360f
 private const val EDITOR_MIN_WIDTH_DP = 320f
 
 /** タグの先頭絵文字とテキストの間に半角スペースを入れる */
@@ -88,6 +87,7 @@ fun App(
     prefs: Prefs,
     server: MediaServer,
     onMinimumWindowWidth: (Float) -> Unit = {},
+    onResizeWindowBy: (Float) -> Unit = {},
 ) {
     val scope = rememberCoroutineScope()
 
@@ -149,13 +149,19 @@ fun App(
     var listWidth by remember { mutableStateOf(prefs.listWidth.dp) }
     var listVisible by remember { mutableStateOf(prefs.listVisible) }
     var editorWidth by remember { mutableStateOf(prefs.editorWidth.dp) }
+    var previewMinWidth by remember { mutableStateOf(prefs.previewMinWidth.dp) }
+    var previewMaxWidth by remember { mutableStateOf(prefs.previewMaxWidth.dp) }
+    var previewWidth by remember {
+        mutableStateOf(prefs.previewWidth.dp.coerceIn(previewMinWidth, previewMaxWidth))
+    }
 
-    LaunchedEffect(editing, listVisible, listWidth) {
+    LaunchedEffect(editing, listVisible, listWidth, previewWidth, previewMinWidth) {
         // プレビューの共通最低幅 + 操作可能な編集欄 320dp を常に先取りする。
         // これにより live resize 中にも Chromium が編集欄へ重なる幅にならない。
         val listPart = if (listVisible) listWidth.value + 10f else 0f
         val editorPart = if (editing) EDITOR_MIN_WIDTH_DP + 10f else 0f
-        onMinimumWindowWidth(listPart + PREVIEW_MIN_WIDTH_DP + editorPart)
+        val previewPart = if (editing) previewWidth.value else previewMinWidth.value
+        onMinimumWindowWidth(listPart + previewPart + editorPart)
     }
 
     fun currentQuery(): String = buildList {
@@ -342,10 +348,13 @@ fun App(
         val note = selected ?: return
         loadDraft(note)
         editorMode = prefs.editorMode
+        // 現在のプレビュー幅はそのまま残し、編集列のぶんだけ右へ広げる。
+        onResizeWindowBy(editorWidth.value + 10f)
         editing = true
     }
 
     fun stopEditing() {
+        if (editing) onResizeWindowBy(-(editorWidth.value + 10f))
         editing = false
         dirty = false
         if (creating) {
@@ -375,35 +384,44 @@ fun App(
     }
 
     fun saveEdits() {
+        // ボタン、⌘S、一覧のカード選択による自動保存が同じフレームで重なっても、
+        // 新規ノートの addNote() は一度しか実行させない。
+        if (saving) return
         val note = selected ?: return
+        val wasCreating = creating
+        val fieldsToSave = draft.fields.toList()
+        val tagsToSave = draft.tags
+        saving = true
         scope.launch {
-            saving = true
             try {
-                if (creating) {
+                if (wasCreating) {
                     val added = withContext(Dispatchers.IO) {
-                        repo.addNote(newNoteTypeId, newNoteDeckId, draft.fields, draft.tags)
+                        repo.addNote(newNoteTypeId, newNoteDeckId, fieldsToSave, tagsToSave)
                     }
                     creating = false
                     dirty = false
                     notes = listOf(added) + notes
-                    pendingEdits[added.id] = NoteContent(draft.fields, draft.tags)
+                    pendingEdits[added.id] = NoteContent(fieldsToSave, tagsToSave)
                     message = "ノートを追加しました"
                     select(added)
                     syncInBackground()
                     return@launch
                 }
-                withContext(Dispatchers.IO) { repo.saveNote(note, draft.fields, draft.tags) }
+                withContext(Dispatchers.IO) { repo.saveNote(note, fieldsToSave, tagsToSave) }
                 dirty = false
-                pendingEdits[note.id] = NoteContent(draft.fields, draft.tags)
+                pendingEdits[note.id] = NoteContent(fieldsToSave, tagsToSave)
                 message = "保存しました"
                 saveTick++
                 notes = notes.map {
-                    if (it.id == note.id) it.copy(fields = draft.fields, tags = draft.tags) else it
+                    if (it.id == note.id) it.copy(fields = fieldsToSave, tags = tagsToSave) else it
                 }
-                selected = notes.firstOrNull { it.id == note.id } ?: note
-                // 長文などでライブプレビューを止めている場合も、保存した瞬間には
-                // 必ず保存済みの内容をプレビューへ反映する。
-                refreshPreview()
+                // 保存中に別ノートへ移動していた場合、その選択を巻き戻さない。
+                if (selected?.id == note.id) {
+                    selected = notes.firstOrNull { it.id == note.id } ?: note
+                    // 長文などでライブプレビューを止めている場合も、保存した瞬間には
+                    // 必ず保存済みの内容をプレビューへ反映する。
+                    refreshPreview()
+                }
             } catch (e: Exception) {
                 message = "保存失敗: ${e.message}"
             } finally {
@@ -590,7 +608,7 @@ fun App(
                 if (listVisible) SplitHandle { delta ->
                     val moved = actualListWidth + with(density) { delta.toDp() }
                     // ドラッグ中だけ、現在のウインドウ内にプレビューを残す上限を適用する。
-                    val previewFloor = PREVIEW_MIN_WIDTH_DP.dp + if (editing) editorWidth else 0.dp
+                    val previewFloor = previewWidth + if (editing) EDITOR_MIN_WIDTH_DP.dp else 0.dp
                     val listMax = (total - previewFloor - 20.dp).coerceAtLeast(220.dp)
                     listWidth = moved.coerceIn(220.dp, listMax)
                     prefs.listWidth = listWidth.value
@@ -603,8 +621,18 @@ fun App(
                     animationSpec = tween(260),
                     label = "editorWidth",
                 )
+                val rightAvailable = (total - shownListWidth - if (listVisible) 10.dp else 0.dp)
+                    .coerceAtLeast(previewMinWidth)
+                val nonEditingPreview = rightAvailable.coerceIn(previewMinWidth, previewMaxWidth)
+                if (!editing) {
+                    SideEffect {
+                        previewWidth = nonEditingPreview
+                        prefs.previewWidth = nonEditingPreview.value
+                    }
+                }
+                val boundedPreviewWidth = previewWidth.coerceIn(previewMinWidth, previewMaxWidth)
                 Row(Modifier.weight(1f).fillMaxHeight()) {
-                    Box(Modifier.weight(1f).fillMaxHeight()) {
+                    Box(Modifier.width(boundedPreviewWidth).fillMaxHeight()) {
                         PreviewPane(
                             note = selected,
                             server = server,
@@ -627,25 +655,24 @@ fun App(
                                 conflicts.isNotEmpty(),
                             statusMessage = message,
                             syncing = syncing,
+                            lockWidthDuringWindowResize = editing,
                             modifier = Modifier.fillMaxSize(),
                         )
                     }
                     // いまのウインドウ幅で編集列に使える上限。
                     // プレビューの共通最低幅を先に確保する。
-                    val editorRoom =
-                        (total - actualListWidth - PREVIEW_MIN_WIDTH_DP.dp - 20.dp)
-                            .coerceAtLeast(EDITOR_MIN_WIDTH_DP.dp)
-                    // 保存幅を優先しつつ、プレビュー最低幅を侵食する場合だけ編集欄を縮める。
-                    val effectiveEditorWidth = editorWidth.coerceAtMost(editorRoom)
+                    val editorRoom = (rightAvailable - boundedPreviewWidth - 10.dp)
+                        .coerceAtLeast(EDITOR_MIN_WIDTH_DP.dp)
+                    val effectiveEditorWidth = if (editing) editorRoom else editorWidth
+                    if (editing) SideEffect {
+                        editorWidth = effectiveEditorWidth
+                        prefs.editorWidth = effectiveEditorWidth.value
+                    }
                     if (editorShown > 0.001f) {
                         SplitHandle { delta ->
-                            val moved = editorWidth - with(density) { delta.toDp() }
-                            // 編集列を広げても、プレビューは 250dp を残す
-                            val editorMax =
-                                (total - actualListWidth - PREVIEW_MIN_WIDTH_DP.dp - 20.dp)
-                                    .coerceAtLeast(EDITOR_MIN_WIDTH_DP.dp)
-                            editorWidth = moved.coerceIn(EDITOR_MIN_WIDTH_DP.dp, editorMax)
-                            prefs.editorWidth = editorWidth.value
+                            val moved = previewWidth + with(density) { delta.toDp() }
+                            previewWidth = moved.coerceIn(previewMinWidth, previewMaxWidth)
+                            prefs.previewWidth = previewWidth.value
                         }
                         Box(
                             Modifier
@@ -688,6 +715,12 @@ fun App(
             onOpenLogin = { showSettings = false; showLogin = true },
             onMessage = { message = it },
             onRefreshMeta = { refreshMeta(); search() },
+            onPreviewBoundsChanged = { min, max ->
+                previewMinWidth = min.dp
+                previewMaxWidth = max.dp
+                previewWidth = previewWidth.coerceIn(previewMinWidth, previewMaxWidth)
+                prefs.previewWidth = previewWidth.value
+            },
             onDismiss = { showSettings = false },
         )
     }

@@ -145,6 +145,14 @@ private fun launchApp() = application {
                         current.second,
                         current.third,
                         onMinimumWindowWidth = { minimumContentWidth = it },
+                        onResizeWindowBy = { delta ->
+                            if (delta != 0f) {
+                                window.size = Dimension(
+                                    (window.width + delta).toInt().coerceAtLeast(window.minimumSize.width),
+                                    window.height,
+                                )
+                            }
+                        },
                     )
                 }
             }
