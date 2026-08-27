@@ -3,7 +3,6 @@ package com.haru.ankieditor.desktop
 import androidx.compose.animation.*
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
@@ -86,19 +85,14 @@ fun PreviewPane(
     // 下地はカードの地色 (暗い方) に合わせる。白にすると幅を変えたときに白帯が見える
     val backdrop = MaterialTheme.colorScheme.surface
     Box(modifier.background(backdrop).clipToBounds()) {
-        // 起動時から Chromium を作って待機させる。最初のカードを選んでから
-        // ブラウザを起動すると、カード生成時間に初期化時間まで加わってしまう。
-        val contentAlpha by animateFloatAsState(
-            targetValue = if (hasCard && webReady && !loading && !covered) 1f else 0f,
-            animationSpec = tween(180),
-            label = "previewFade",
-        )
-        WebPane(
+        // 起動時からネイティブ Chromium を作って待機させる。
+        // OSR/Canvas への画素転送は行わず、Chromium のウインドウを直接表示する。
+        NativeWebPane(
             handle = handle,
             html = page,
             background = backdrop,
-            modifier = Modifier.fillMaxSize().graphicsLayer { alpha = contentAlpha },
-            active = true,
+            modifier = Modifier.fillMaxSize(),
+            visible = hasCard && webReady && !loading && !covered,
             onPageReady = {
                 handle.run(com.haru.ankieditor.PreviewFindJs.script)
                 if (handle.browser?.url?.contains(pageName) == true) {

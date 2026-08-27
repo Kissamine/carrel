@@ -33,6 +33,9 @@ fun main() {
     // その上にボタンは重ねられないので、操作はページ自身に持たせている。
     // 合成まわりの実験的な設定は入れない (画面全体が描かれなくなることがある)
     System.setProperty("sun.awt.noerasebackground", "true")
+    // JCEF のネイティブ NSView と Compose を同じ合成面で扱う。
+    // OSR のような画素転送はせず、AppKit/Chromium の GPU レイヤーをそのまま使う。
+    System.setProperty("compose.interop.blending", "true")
     launchApp()
 }
 

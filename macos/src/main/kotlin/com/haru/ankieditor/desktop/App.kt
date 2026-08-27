@@ -57,7 +57,7 @@ import kotlinx.coroutines.withContext
 
 /** カードの地色。WebView の初期描画で黒が見えないように敷いておく */
 val CARD_BACKGROUND = Color(0xFFFFFFFF)
-private const val PREVIEW_MIN_WIDTH_DP = 600f
+private const val PREVIEW_MIN_WIDTH_DP = 360f
 private const val EDITOR_MIN_WIDTH_DP = 320f
 
 /** タグの先頭絵文字とテキストの間に半角スペースを入れる */
@@ -151,7 +151,7 @@ fun App(
     var editorWidth by remember { mutableStateOf(prefs.editorWidth.dp) }
 
     LaunchedEffect(editing, listVisible, listWidth) {
-        // プレビュー 600dp + 操作可能な編集欄 320dp を常に先取りする。
+        // プレビューの共通最低幅 + 操作可能な編集欄 320dp を常に先取りする。
         // これにより live resize 中にも Chromium が編集欄へ重なる幅にならない。
         val listPart = if (listVisible) listWidth.value + 10f else 0f
         val editorPart = if (editing) EDITOR_MIN_WIDTH_DP + 10f else 0f
@@ -628,7 +628,7 @@ fun App(
                         )
                     }
                     // いまのウインドウ幅で編集列に使える上限。
-                    // プレビューの最低幅 (600px) を先に確保する。
+                    // プレビューの共通最低幅を先に確保する。
                     val editorRoom =
                         (total - actualListWidth - PREVIEW_MIN_WIDTH_DP.dp - 20.dp)
                             .coerceAtLeast(EDITOR_MIN_WIDTH_DP.dp)
