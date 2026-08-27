@@ -169,7 +169,7 @@ fun App(
         onMinimumWindowWidth(listPart + previewPart + editorPart)
     }
 
-    LaunchedEffect(editing, listVisible, listWidth, previewMaxWidth) {
+    LaunchedEffect(editing, listVisible, listWidth, previewWidth) {
         // 編集欄が無いときは、プレビュー最大幅より右へ空のウインドウを
         // 広げられないようにする。編集中は右側を編集欄として使うので解除する。
         if (editing) {
@@ -179,7 +179,8 @@ fun App(
             // 先に上限を戻すと、最大幅処理が開閉アニメーションを横取りする。
             delay(320)
             val listPart = if (listVisible) listWidth.value + 10f else 0f
-            onMaximumWindowWidth(listPart + previewMaxWidth.value)
+            // プレビューを現在幅より広げない。幅そのものを変えるのは境界操作だけ。
+            onMaximumWindowWidth(listPart + previewWidth.value)
         }
     }
 
@@ -655,15 +656,6 @@ fun App(
                 )
                 val rightAvailable = (total - shownListWidth - if (listVisible) 10.dp else 0.dp)
                     .coerceAtLeast(previewMinWidth)
-                val nonEditingPreview = rightAvailable.coerceIn(previewMinWidth, previewMaxWidth)
-                // editing は閉じる操作の開始時点で false になるが、editorShown は
-                // 0 までアニメーションする。完全に閉じるまで現在幅を更新しない。
-                if (!editing && editorShown < 0.001f) {
-                    SideEffect {
-                        previewWidth = nonEditingPreview
-                        prefs.previewWidth = nonEditingPreview.value
-                    }
-                }
                 val boundedPreviewWidth = previewWidth.coerceIn(previewMinWidth, previewMaxWidth)
                 Row(Modifier.weight(1f).fillMaxHeight()) {
                     Box(Modifier.width(boundedPreviewWidth).fillMaxHeight()) {
@@ -691,7 +683,9 @@ fun App(
                                 conflicts.isNotEmpty(),
                             statusMessage = message,
                             syncing = syncing,
-                            lockWidthDuringWindowResize = editing,
+                            // editing は閉じる開始時に false になる。見た目上の編集欄が
+                            // 完全に消えるまではJCEFの幅固定を解除しない。
+                            lockWidthDuringWindowResize = editing || editorShown > 0.001f,
                             modifier = Modifier.fillMaxSize(),
                         )
                     }
