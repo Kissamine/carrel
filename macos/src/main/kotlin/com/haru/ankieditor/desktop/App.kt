@@ -81,7 +81,13 @@ data class NoteConflict(val noteId: Long, val mine: NoteContent, val server: Not
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
-fun App(repo: DesktopRepo, prefs: Prefs, server: MediaServer) {
+fun App(
+    repo: DesktopRepo,
+    prefs: Prefs,
+    server: MediaServer,
+    windowResizing: Boolean = false,
+    onMinimumWindowWidth: (Float) -> Unit = {},
+) {
     val scope = rememberCoroutineScope()
 
     // ---- 検索条件 ----
@@ -142,6 +148,14 @@ fun App(repo: DesktopRepo, prefs: Prefs, server: MediaServer) {
     var listWidth by remember { mutableStateOf(prefs.listWidth.dp) }
     var listVisible by remember { mutableStateOf(prefs.listVisible) }
     var editorWidth by remember { mutableStateOf(prefs.editorWidth.dp) }
+
+    LaunchedEffect(editing, listVisible, listWidth) {
+        // プレビュー 600dp + 操作可能な編集欄 320dp を常に先取りする。
+        // これにより live resize 中にも Chromium が編集欄へ重なる幅にならない。
+        val listPart = if (listVisible) listWidth.value + 10f else 0f
+        val editorPart = if (editing) 320f + 10f else 0f
+        onMinimumWindowWidth(listPart + 600f + editorPart)
+    }
 
     fun currentQuery(): String = buildList {
         selectedDeck?.let { add("deck:\"$it\"") }
@@ -607,17 +621,17 @@ fun App(repo: DesktopRepo, prefs: Prefs, server: MediaServer) {
                             covered = showSettings || showLogin || showAddNote ||
                                 deleteTarget != null || fullSyncPrompt != null ||
                                 conflicts.isNotEmpty(),
+                            windowResizing = windowResizing,
                             modifier = Modifier.fillMaxSize(),
                         )
                     }
                     // いまのウインドウ幅で編集列に使える上限。
-                    // プレビューの最低幅 (600px) を先に確保する
+                    // プレビューの最低幅 (600px) を先に確保する。
                     val editorRoom =
                         (total - actualListWidth - with(density) { 600.toDp() } - 20.dp)
-                            .coerceAtLeast(280.dp)
-                    // ここもウインドウ拡縮では境界位置を変えない。狭いときは中央の
-                    // プレビューが縮み、保存済みの編集列幅は維持される。
-                    val effectiveEditorWidth = editorWidth
+                            .coerceAtLeast(320.dp)
+                    // 保存幅を優先しつつ、プレビュー最低幅を侵食する場合だけ編集欄を縮める。
+                    val effectiveEditorWidth = editorWidth.coerceAtMost(editorRoom)
                     if (editorShown > 0.001f) {
                         SplitHandle { delta ->
                             val moved = editorWidth - with(density) { delta.toDp() }

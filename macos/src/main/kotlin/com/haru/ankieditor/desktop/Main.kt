@@ -16,6 +16,10 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.awt.Dimension
+import java.awt.event.ComponentAdapter
+import java.awt.event.ComponentEvent
+import javax.swing.Timer
 
 /**
  * macOS 版の起動処理。
@@ -80,6 +84,33 @@ private fun launchApp() = application {
         state = rememberWindowState(width = 1440.dp, height = 900.dp),
         title = "Anki Editor",
     ) {
+        var windowResizing by remember { mutableStateOf(false) }
+        var minimumContentWidth by remember { mutableStateOf(900f) }
+
+        // AppKit の live resize 中だけ、ネイティブ子ビューを安全な描画へ切り替える。
+        // 連続した resize イベントが止まって少し経った時点をドラッグ終了とみなす。
+        DisposableEffect(window) {
+            val settleTimer = Timer(110) { windowResizing = false }.apply {
+                isRepeats = false
+            }
+            val listener = object : ComponentAdapter() {
+                override fun componentResized(event: ComponentEvent?) {
+                    windowResizing = true
+                    settleTimer.restart()
+                }
+            }
+            window.addComponentListener(listener)
+            onDispose {
+                settleTimer.stop()
+                window.removeComponentListener(listener)
+            }
+        }
+
+        LaunchedEffect(minimumContentWidth) {
+            // Compose の dp と macOS のウインドウ座標はいずれも論理ピクセル。
+            // 編集中にプレビュー最低幅を割り込むところまで縮められないようにする。
+            window.minimumSize = Dimension(minimumContentWidth.toInt(), 620)
+        }
         // macOS のタイトルバーは出さず、内容を上端まで広げる。
         // 閉じる・最小化のボタンだけが内容の上に浮く形になる
         // 動作確認用: 画面の内容と、重なっている部品の位置を書き出す
@@ -129,7 +160,13 @@ private fun launchApp() = application {
                 if (current == null) {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text(status) }
                 } else {
-                    App(current.first, current.second, current.third)
+                    App(
+                        current.first,
+                        current.second,
+                        current.third,
+                        windowResizing = windowResizing,
+                        onMinimumWindowWidth = { minimumContentWidth = it },
+                    )
                 }
             }
         }

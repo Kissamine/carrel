@@ -121,6 +121,8 @@ fun WebPane(
     background: Color,
     modifier: Modifier = Modifier,
     zoom: Double = 1.0,
+    /** false の間は待機表示なので、Chromium の描画頻度を落として負荷を抑える */
+    active: Boolean = true,
     onPageReady: () -> Unit = {},
     onHtmlChanged: (WebHandle, String) -> Unit = { h, url -> h.loadHtml(url) },
     onBridge: (String) -> Unit = {},
@@ -331,7 +333,7 @@ fun WebPane(
     }
 
     // 大きさが変わったらページにも伝える
-    LaunchedEffect(size, handle.browser) {
+    LaunchedEffect(size, handle.browser, active) {
         val b = handle.browser ?: return@LaunchedEffect
         if (size.width <= 0f || size.height <= 0f) return@LaunchedEffect
         val w = (size.width / density).toInt().coerceAtLeast(1)
@@ -339,8 +341,8 @@ fun WebPane(
         // 画面の情報も伝え直してから大きさを反映する (倍率が変わる場合に備えて)
         b.notifyScreenInfoChanged()
         b.wasResized(w, h)
-        // 既定では 1 秒に 30 枚しか描き替えないので、動きに追従できる速さにする
-        runCatching { b.setWindowlessFrameRate(60) }
+        // live resize・編集時だけ滑らかにし、背面待機中は負荷を抑える。
+        runCatching { b.setWindowlessFrameRate(if (active) 60 else 5) }
         if (System.getProperty("ankieditor.debug") != null) {
             println("[web] 表示領域 ${w}x$h (実ピクセル ${size.width.toInt()}x${size.height.toInt()})")
         }
