@@ -33,7 +33,7 @@ object PreviewFindJs {
                 if (tag === 'SCRIPT' || tag === 'STYLE') return NodeFilter.FILTER_REJECT;
                 // 画面に出ていない所は飛ばす
                 var el = node.parentElement;
-                if (el && el.closest('.anki-find, .anki-bar, .anki-side')) {
+                if (el && el.closest('.anki-find, .anki-bar, .anki-side, .anki-title-tools')) {
                   return NodeFilter.FILTER_REJECT;
                 }
                 return NodeFilter.FILTER_ACCEPT;

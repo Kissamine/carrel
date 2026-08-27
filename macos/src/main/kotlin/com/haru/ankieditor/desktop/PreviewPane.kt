@@ -54,6 +54,8 @@ fun PreviewPane(
     lockWidthDuringWindowResize: Boolean = false,
     /** 一覧をしまっているときに戻すための操作 */
     onShowList: (() -> Unit)? = null,
+    onUndo: (() -> Unit)? = null,
+    onRedo: (() -> Unit)? = null,
     /** ⌘F が押された回数。増えたら検索バーを開く */
     findRequest: Int = 0,
 ) {
@@ -68,6 +70,7 @@ fun PreviewPane(
     // ページ自体に操作を持たせる (OS に描かせる方式では上に重ねられないため)
     val page = remember(
         html, onEdit != null, onAdd != null, findable, onRefresh != null, onShowList != null,
+        onUndo != null, onRedo != null,
     ) {
         html?.let {
             it.replace(
@@ -78,6 +81,8 @@ fun PreviewPane(
                     canFind = findable,
                     canRefresh = onRefresh != null,
                     canShowList = onShowList != null,
+                    canUndo = onUndo != null,
+                    canRedo = onRedo != null,
                 ) + "</body>",
             )
         }
@@ -122,6 +127,8 @@ fun PreviewPane(
                     "ui:edit" -> onEdit?.invoke()
                     "ui:refresh" -> onRefresh?.invoke()
                     "ui:showlist" -> onShowList?.invoke()
+                    "ui:undo" -> onUndo?.invoke()
+                    "ui:redo" -> onRedo?.invoke()
                 }
             },
         )

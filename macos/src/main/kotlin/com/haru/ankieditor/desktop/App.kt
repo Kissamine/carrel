@@ -38,6 +38,7 @@ import androidx.compose.ui.input.key.isMetaPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -54,6 +55,9 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.awt.KeyboardFocusManager
+import java.awt.event.InputEvent
+import java.awt.event.KeyEvent as AwtKeyEvent
 
 /** カードの地色。WebView の初期描画で黒が見えないように敷いておく */
 val CARD_BACKGROUND = Color(0xFFFFFFFF)
@@ -183,6 +187,19 @@ fun App(
                 if (it.isEmpty()) error = "該当ノートなし"
             }.onFailure { error = "検索失敗: ${it.message}" }
         }
+    }
+
+    fun sendHistoryShortcut(redo: Boolean) {
+        val target = KeyboardFocusManager.getCurrentKeyboardFocusManager().focusOwner ?: return
+        val modifiers = InputEvent.META_DOWN_MASK or
+            if (redo) InputEvent.SHIFT_DOWN_MASK else 0
+        val now = System.currentTimeMillis()
+        target.dispatchEvent(
+            AwtKeyEvent(target, AwtKeyEvent.KEY_PRESSED, now, modifiers, AwtKeyEvent.VK_Z, 'z')
+        )
+        target.dispatchEvent(
+            AwtKeyEvent(target, AwtKeyEvent.KEY_RELEASED, now, modifiers, AwtKeyEvent.VK_Z, 'z')
+        )
     }
 
     fun refreshMeta() {
@@ -649,6 +666,8 @@ fun App(
                                 listVisible = true
                                 prefs.listVisible = true
                             }),
+                            onUndo = if (editing) ({ sendHistoryShortcut(false) }) else null,
+                            onRedo = if (editing) ({ sendHistoryShortcut(true) }) else null,
                             // 設定や確認を前に出している間は、ページを引っ込める
                             covered = showSettings || showLogin || showAddNote ||
                                 deleteTarget != null || fullSyncPrompt != null ||
@@ -701,6 +720,23 @@ fun App(
             }
         }
     }
+
+        // 信号機の直後に固定するタイトルバー操作。プレビューが全面表示のときは
+        // 同じ部品をカードHTML側へ出す（ネイティブJCEFが前面になるため）。
+        if (listVisible) {
+            TitlebarControls(
+                listVisible = true,
+                editing = editing,
+                onToggleList = {
+                    listVisible = false
+                    prefs.listVisible = false
+                },
+                onUndo = { sendHistoryShortcut(false) },
+                onRedo = { sendHistoryShortcut(true) },
+                modifier = Modifier.align(Alignment.TopStart).padding(start = 82.dp, top = 3.dp)
+                    .zIndex(20f),
+            )
+        }
 
     }
 
@@ -797,4 +833,31 @@ fun App(
         collectionTags = collectionTags,
         onRefreshMeta = { refreshMeta(); search() },
     )
+}
+
+@Composable
+private fun TitlebarControls(
+    listVisible: Boolean,
+    editing: Boolean,
+    onToggleList: () -> Unit,
+    onUndo: () -> Unit,
+    onRedo: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(modifier, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+        IconButton(onClick = onToggleList, modifier = Modifier.size(30.dp)) {
+            Icon(
+                Icons.Default.ViewSidebar,
+                if (listVisible) "一覧を閉じる" else "一覧を開く",
+                Modifier.size(19.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        IconButton(onClick = onUndo, enabled = editing, modifier = Modifier.size(30.dp)) {
+            Icon(Icons.Default.Undo, "元に戻す", Modifier.size(19.dp))
+        }
+        IconButton(onClick = onRedo, enabled = editing, modifier = Modifier.size(30.dp)) {
+            Icon(Icons.Default.Redo, "やり直す", Modifier.size(19.dp))
+        }
+    }
 }

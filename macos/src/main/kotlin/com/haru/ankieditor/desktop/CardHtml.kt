@@ -23,6 +23,8 @@ object CardHtml {
         canFind: Boolean,
         canRefresh: Boolean,
         canShowList: Boolean = false,
+        canUndo: Boolean = false,
+        canRedo: Boolean = false,
     ): String {
         fun button(id: String, title: String, kind: String, svg: String, shown: Boolean) =
             if (!shown) "" else
@@ -52,14 +54,18 @@ object CardHtml {
           .anki-fab.refresh { background: #234C56; }
           .anki-fab.refresh svg { fill: #BFE9F6; }
 
-          .anki-side {
-            /* macOS のウインドウボタン (信号機) の右に並べる */
-            position: fixed; top: 12px; left: 86px; width: 30px; height: 30px;
-            border: 0; border-radius: 8px; cursor: pointer; z-index: 2147483000;
-            background: rgba(60,72,88,.92); color: #D8E3F8; font-size: 17px; line-height: 1;
-            box-shadow: 0 2px 8px rgba(0,0,0,.3);
+          .anki-title-tools {
+            position: fixed; top: 3px; left: 82px; display: flex; gap: 2px;
+            z-index: 2147483000; font-family: -apple-system, BlinkMacSystemFont, sans-serif;
           }
-          .anki-side:hover { filter: brightness(1.15); }
+          .anki-title-tools button {
+            width: 30px; height: 30px; padding: 0; border: 0; border-radius: 7px;
+            cursor: pointer; background: transparent; color: #AEB5BE;
+            display: flex; align-items: center; justify-content: center;
+          }
+          .anki-title-tools button:hover { background: rgba(255,255,255,.08); }
+          .anki-title-tools button:disabled { opacity: .32; cursor: default; background: transparent; }
+          .anki-title-tools svg { width: 19px; height: 19px; fill: currentColor; }
 
           .anki-find {
             position: fixed; top: 12px; left: 50%;
@@ -91,10 +97,13 @@ object CardHtml {
           <button id="ankiFindNext">›</button>
           <button id="ankiFindClose">✕</button>
         </div>
-        ${
-            if (!canShowList) "" else
-                """<button class="anki-side" id="ankiShowList" title="一覧を表示">›</button>"""
-        }
+        ${if (!canShowList) "" else """
+        <div class="anki-title-tools">
+          <button id="ankiShowList" title="一覧を開く"><svg viewBox="0 0 24 24"><path d="M4 4h16v16H4V4zm2 2v12h4V6H6zm6 0v12h6V6h-6z"/></svg></button>
+          <button id="ankiUndo" title="元に戻す" ${if (canUndo) "" else "disabled"}><svg viewBox="0 0 24 24"><path d="M7.5 7H16a5 5 0 0 1 0 10h-3v-2h3a3 3 0 0 0 0-6H7.5l3 3L9 13.5 3.5 8 9 2.5 10.5 4l-3 3z"/></svg></button>
+          <button id="ankiRedo" title="やり直す" ${if (canRedo) "" else "disabled"}><svg viewBox="0 0 24 24"><path d="M16.5 7H8a5 5 0 0 0 0 10h3v-2H8a3 3 0 0 1 0-6h8.5l-3 3 1.5 1.5L20.5 8 15 2.5 13.5 4l3 3z"/></svg></button>
+        </div>
+        """}
         <div class="anki-bar">
           ${button("ankiRefresh", "プレビューを更新", "refresh", reload, canRefresh)}
           ${button("ankiAdd", "新しいノート", "add", plus, canAdd)}
@@ -111,6 +120,9 @@ object CardHtml {
           var byId = document.getElementById.bind(document);
           var side = byId('ankiShowList');
           if (side) side.addEventListener('click', function () { tell('ui:showlist'); });
+          var undo = byId('ankiUndo'), redo = byId('ankiRedo');
+          if (undo) undo.addEventListener('click', function () { tell('ui:undo'); });
+          if (redo) redo.addEventListener('click', function () { tell('ui:redo'); });
           ['Add', 'Edit', 'Refresh'].forEach(function (name) {
             var el = byId('anki' + name);
             if (el) el.addEventListener('click', function () { tell('ui:' + name.toLowerCase()); });
