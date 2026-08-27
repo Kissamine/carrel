@@ -6,6 +6,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.window.Window
@@ -15,6 +18,7 @@ import androidx.compose.ui.unit.dp
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.launch
 import java.io.File
 import java.awt.Dimension
 
@@ -85,11 +89,37 @@ private fun launchApp() = application {
         title = "Anki Editor",
     ) {
         var minimumContentWidth by remember { mutableStateOf(900f) }
+        var maximumContentWidth by remember { mutableStateOf<Float?>(null) }
+        val windowScope = rememberCoroutineScope()
+        var widthAnimation by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
 
         LaunchedEffect(minimumContentWidth) {
             // Compose の dp と macOS のウインドウ座標はいずれも論理ピクセル。
             // 編集中にプレビュー最低幅を割り込むところまで縮められないようにする。
             window.minimumSize = Dimension(minimumContentWidth.toInt(), 620)
+        }
+        LaunchedEffect(maximumContentWidth) {
+            val maximum = maximumContentWidth
+            if (maximum == null) {
+                // 編集中は画面の利用可能幅まで自由に広げられる。
+                window.maximumSize = Dimension(Int.MAX_VALUE, Int.MAX_VALUE)
+            } else {
+                val maxWidth = maximum.toInt().coerceAtLeast(window.minimumSize.width)
+                if (window.width > maxWidth) {
+                    // 先に最大値を設定すると AppKit が一瞬で縮めてしまうため、
+                    // 開閉と同じカーブで幅を戻してから上限を固定する。
+                    window.maximumSize = Dimension(Int.MAX_VALUE, Int.MAX_VALUE)
+                    widthAnimation?.cancel()
+                    val from = window.width.toFloat()
+                    Animatable(from).animateTo(
+                        maxWidth.toFloat(),
+                        animationSpec = tween(280, easing = FastOutSlowInEasing),
+                    ) {
+                        window.size = Dimension(value.toInt(), window.height)
+                    }
+                }
+                window.maximumSize = Dimension(maxWidth, Int.MAX_VALUE)
+            }
         }
         // macOS のタイトルバーは出さず、内容を上端まで広げる。
         // 閉じる・最小化のボタンだけが内容の上に浮く形になる
@@ -145,12 +175,21 @@ private fun launchApp() = application {
                         current.second,
                         current.third,
                         onMinimumWindowWidth = { minimumContentWidth = it },
+                        onMaximumWindowWidth = { maximumContentWidth = it },
                         onResizeWindowBy = { delta ->
                             if (delta != 0f) {
-                                window.size = Dimension(
-                                    (window.width + delta).toInt().coerceAtLeast(window.minimumSize.width),
-                                    window.height,
-                                )
+                                widthAnimation?.cancel()
+                                val from = window.width.toFloat()
+                                val target = (from + delta)
+                                    .coerceAtLeast(window.minimumSize.width.toFloat())
+                                widthAnimation = windowScope.launch {
+                                    Animatable(from).animateTo(
+                                        target,
+                                        animationSpec = tween(280, easing = FastOutSlowInEasing),
+                                    ) {
+                                        window.size = Dimension(value.toInt(), window.height)
+                                    }
+                                }
                             }
                         },
                     )

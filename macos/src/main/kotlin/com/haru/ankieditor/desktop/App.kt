@@ -91,6 +91,7 @@ fun App(
     prefs: Prefs,
     server: MediaServer,
     onMinimumWindowWidth: (Float) -> Unit = {},
+    onMaximumWindowWidth: (Float?) -> Unit = {},
     onResizeWindowBy: (Float) -> Unit = {},
 ) {
     val scope = rememberCoroutineScope()
@@ -166,6 +167,17 @@ fun App(
         val editorPart = if (editing) EDITOR_MIN_WIDTH_DP + 10f else 0f
         val previewPart = if (editing) previewWidth.value else previewMinWidth.value
         onMinimumWindowWidth(listPart + previewPart + editorPart)
+    }
+
+    LaunchedEffect(editing, listVisible, listWidth, previewMaxWidth) {
+        // 編集欄が無いときは、プレビュー最大幅より右へ空のウインドウを
+        // 広げられないようにする。編集中は右側を編集欄として使うので解除する。
+        if (editing) {
+            onMaximumWindowWidth(null)
+        } else {
+            val listPart = if (listVisible) listWidth.value + 10f else 0f
+            onMaximumWindowWidth(listPart + previewMaxWidth.value)
+        }
     }
 
     fun currentQuery(): String = buildList {
