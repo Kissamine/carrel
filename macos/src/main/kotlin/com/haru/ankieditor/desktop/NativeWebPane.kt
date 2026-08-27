@@ -1,9 +1,11 @@
 package com.haru.ankieditor.desktop
 
 import androidx.compose.runtime.*
+import androidx.compose.foundation.layout.size
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.awt.SwingPanel
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
 import org.cef.browser.CefBrowser
 import org.cef.browser.CefRendering
 import org.cef.handler.CefLoadHandlerAdapter
@@ -213,7 +215,14 @@ fun NativeWebPane(
     // 重ねて出すものがあるときは、いったん引っ込める
     LaunchedEffect(visible) { container.isVisible = visible }
 
-    SwingPanel(factory = { container }, modifier = modifier, background = background)
+    // container.isVisible だけでは、Compose が作る SwingPanel 自体のネイティブ面が
+    // 前面に残り、白い板として背面を覆ってしまう。非表示時は interop view の枠も
+    // 0 にして、背面の OSR Chromium を確実に見せる。
+    SwingPanel(
+        factory = { container },
+        modifier = if (visible) modifier else Modifier.size(0.dp),
+        background = background,
+    )
 }
 
 

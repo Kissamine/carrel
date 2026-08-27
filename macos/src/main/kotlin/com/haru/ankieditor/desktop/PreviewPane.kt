@@ -54,6 +54,8 @@ fun PreviewPane(
     val loadedNote = remember { longArrayOf(-1L) }
     // ページはローカルサーバーから配る (画像や音声を相対の名前で読めるように)
     val pageName = remember(note?.id) { "__preview_${note?.id ?: 0}.html" }
+    val resizePageName = remember(note?.id) { "__preview_resize_${note?.id ?: 0}.html" }
+    var resizeReady by remember(note?.id) { mutableStateOf(false) }
 
     // ノートを選ぶまではカードの白地を出さず、アプリの地色のままにする
     val hasCard = note != null && html != null
@@ -83,6 +85,7 @@ fun PreviewPane(
         var everShown by remember { mutableStateOf(false) }
         LaunchedEffect(hasCard) { if (hasCard) everShown = true }
         val showWeb = (hasCard || everShown) && !covered
+        val usingResizePreview = windowResizing && resizeReady
         // ネイティブ NSView は AppKit の live resize 中に Compose より一拍遅れて
         // 古い枠へ描くため、隣の編集欄への重なりや白い未描画帯が発生する。
         // 同じ Chromium の OSR 画面を常に背面に用意し、ドラッグ中だけこちらを見せる。
@@ -91,12 +94,18 @@ fun PreviewPane(
             html = page,
             background = backdrop,
             modifier = Modifier.fillMaxSize(),
-            active = windowResizing,
-            onPageReady = { resizeHandle.run(com.haru.ankieditor.PreviewFindJs.script) },
+            active = usingResizePreview,
+            onPageReady = {
+                resizeHandle.run(com.haru.ankieditor.PreviewFindJs.script)
+                // about:blank の初回完了ではなく、カード本体が描画可能になってから切替える。
+                if (resizeHandle.browser?.url?.contains(resizePageName) == true) {
+                    resizeReady = true
+                }
+            },
             onHtmlChanged = { h, content ->
-                val fallbackName = "__preview_resize_${note?.id ?: 0}.html"
-                server.putPage(fallbackName, content)
-                h.loadHtml(server.baseUrl + fallbackName)
+                resizeReady = false
+                server.putPage(resizePageName, content)
+                h.loadHtml(server.baseUrl + resizePageName)
             },
             onBridge = { message ->
                 when (message) {
@@ -115,7 +124,7 @@ fun PreviewPane(
             modifier = Modifier.fillMaxSize(),
             // ブラウザ自体は破棄せず、live resize 中だけ NSView を引っ込める。
             // ドラッグ終了後は同じページ・スクロール位置のまま即座に復帰する。
-            visible = !windowResizing,
+            visible = !usingResizePreview,
             onPageReady = { handle.run(com.haru.ankieditor.PreviewFindJs.script) },
             onHtmlChanged = { h, content ->
                 val id = note?.id ?: -1L
@@ -142,9 +151,9 @@ fun PreviewPane(
 
         // live resize の前後でスクロール位置を引き継ぐ。背面の表示が先頭に戻ったり、
         // ドラッグ終了時に元の位置へ跳ねたりしないようにする。
-        LaunchedEffect(windowResizing, showWeb) {
+        LaunchedEffect(usingResizePreview, showWeb) {
             if (!showWeb) return@LaunchedEffect
-            if (windowResizing) {
+            if (usingResizePreview) {
                 handle.run("JSON.stringify({x:scrollX,y:scrollY})") { raw ->
                     val point = runCatching { org.json.JSONObject(raw?.toString().orEmpty()) }.getOrNull()
                     val x = point?.optDouble("x", 0.0) ?: 0.0
