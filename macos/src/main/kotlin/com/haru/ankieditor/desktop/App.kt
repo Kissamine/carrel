@@ -669,11 +669,21 @@ fun App(
 
                 if (listVisible) SplitHandle { delta ->
                     val moved = actualListWidth + with(density) { delta.toDp() }
-                    // ドラッグ中だけ、現在のウインドウ内にプレビューを残す上限を適用する。
-                    val previewFloor = previewWidth + if (editing) EDITOR_MIN_WIDTH_DP.dp else 0.dp
-                    val listMax = (total - previewFloor - 20.dp).coerceAtLeast(220.dp)
+                    // 一覧を広げるぶんは、プレビューが最低幅まで譲る。
+                    // いまのプレビュー幅を基準にすると余地が無く、まったく動かせなくなる
+                    val floor = previewMinWidth + if (editing) EDITOR_MIN_WIDTH_DP.dp + 10.dp else 0.dp
+                    val listMax = (total - floor - 20.dp).coerceAtLeast(220.dp)
                     listWidth = moved.coerceIn(220.dp, listMax)
                     prefs.listWidth = listWidth.value
+                    // 一覧を広げた結果はみ出すぶんは、プレビューを縮めて収める
+                    val room = (total - listWidth - 20.dp -
+                        if (editing) EDITOR_MIN_WIDTH_DP.dp + 10.dp else 0.dp)
+                        .coerceAtLeast(previewMinWidth)
+                    if (previewWidth > room) {
+                        previewWidth = room.coerceIn(previewMinWidth, previewMaxWidth)
+                        frozenPreviewWidth = previewWidth
+                        prefs.previewWidth = previewWidth.value
+                    }
                 }
 
                 // ---- 右: 編集 + プレビュー ----
@@ -727,7 +737,11 @@ fun App(
                         SplitHandle { delta ->
                             // プレビューが右側なので、境界を左へ動かすほど幅が増える。
                             val moved = previewWidth - with(density) { delta.toDp() }
-                            previewWidth = moved.coerceIn(previewMinWidth, previewMaxWidth)
+                            // 編集欄が最小幅を割ると、列の合計がウインドウを越えて
+                            // 画面全体が右へはみ出す。ここで頭打ちにする
+                            val ceiling = (rightAvailable - EDITOR_MIN_WIDTH_DP.dp - 10.dp)
+                                .coerceIn(previewMinWidth, previewMaxWidth)
+                            previewWidth = moved.coerceIn(previewMinWidth, ceiling)
                             frozenPreviewWidth = previewWidth
                             prefs.previewWidth = previewWidth.value
                         }

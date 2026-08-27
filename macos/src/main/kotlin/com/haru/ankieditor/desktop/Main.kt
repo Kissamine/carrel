@@ -159,6 +159,13 @@ private fun launchApp() = application {
 
         LaunchedEffect(window) {
             runCatching {
+                // 幅を変えている一瞬、まだ描かれていない部分が見える。
+                // そこが白いと目立つので、カードの地色にそろえておく
+                val backdrop = java.awt.Color(0x2C, 0x2C, 0x2C)
+                window.background = backdrop
+                window.contentPane.background = backdrop
+                window.rootPane.background = backdrop
+                (window.contentPane as? javax.swing.JComponent)?.isOpaque = true
                 window.rootPane.putClientProperty("apple.awt.fullWindowContent", true)
                 window.rootPane.putClientProperty("apple.awt.transparentTitleBar", true)
                 window.rootPane.putClientProperty("apple.awt.windowTitleVisible", false)
