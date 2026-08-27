@@ -502,10 +502,9 @@ fun App(repo: DesktopRepo, prefs: Prefs, server: MediaServer) {
 
             Row(Modifier.fillMaxSize()) {
                 // ---- 左: 検索と一覧 ----
-                // プレビューが 600 ピクセルを切らないよう、一覧の幅に上限をかける
-                val previewFloor = with(density) { 600.toDp() } + if (editing) editorWidth else 0.dp
-                val listMax = (total - previewFloor - 20.dp).coerceAtLeast(220.dp)
-                val actualListWidth = listWidth.coerceIn(220.dp, listMax)
+                // 保存した境界はウインドウの拡縮では動かさない。
+                // 幅を変えるのは、ユーザーが境界を直接ドラッグしたときだけ。
+                val actualListWidth = listWidth.coerceAtLeast(220.dp)
                 // 一覧はしまえる。幅を 0 まで縮めて、そのまま隠す
                 val shownListWidth by animateDpAsState(
                     targetValue = if (listVisible) actualListWidth else 0.dp,
@@ -572,6 +571,9 @@ fun App(repo: DesktopRepo, prefs: Prefs, server: MediaServer) {
 
                 if (listVisible) SplitHandle { delta ->
                     val moved = actualListWidth + with(density) { delta.toDp() }
+                    // ドラッグ中だけ、現在のウインドウ内にプレビューを残す上限を適用する。
+                    val previewFloor = with(density) { 600.toDp() } + if (editing) editorWidth else 0.dp
+                    val listMax = (total - previewFloor - 20.dp).coerceAtLeast(220.dp)
                     listWidth = moved.coerceIn(220.dp, listMax)
                     prefs.listWidth = listWidth.value
                 }
@@ -613,7 +615,9 @@ fun App(repo: DesktopRepo, prefs: Prefs, server: MediaServer) {
                     val editorRoom =
                         (total - actualListWidth - with(density) { 600.toDp() } - 20.dp)
                             .coerceAtLeast(280.dp)
-                    val effectiveEditorWidth = if (editorWidth > editorRoom) editorRoom else editorWidth
+                    // ここもウインドウ拡縮では境界位置を変えない。狭いときは中央の
+                    // プレビューが縮み、保存済みの編集列幅は維持される。
+                    val effectiveEditorWidth = editorWidth
                     if (editorShown > 0.001f) {
                         SplitHandle { delta ->
                             val moved = editorWidth - with(density) { delta.toDp() }

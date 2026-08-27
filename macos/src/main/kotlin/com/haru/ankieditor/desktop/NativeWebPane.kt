@@ -8,6 +8,9 @@ import org.cef.browser.CefBrowser
 import org.cef.browser.CefRendering
 import org.cef.handler.CefLoadHandlerAdapter
 import java.awt.BorderLayout
+import java.awt.event.ComponentAdapter
+import java.awt.event.ComponentEvent
+import javax.swing.SwingUtilities
 import javax.swing.JPanel
 
 /**
@@ -31,8 +34,24 @@ fun NativeWebPane(
     val ready = rememberUpdatedState(onPageReady)
     val bridge = rememberUpdatedState(onBridge)
     // 広げた瞬間に空白が見えないよう、下地の色をカードと同じにしておく
+    var browserForLayout by remember { mutableStateOf<CefBrowser?>(null) }
     val container = remember {
-        JPanel(BorderLayout()).apply {
+        object : JPanel(BorderLayout()) {
+            /**
+             * SwingPanel の外枠が変わった同じレイアウトパス内で Chromium も広げる。
+             * 通常の BorderLayout 任せだと macOS の live resize 中にネイティブ子ビューが
+             * 一拍遅れ、古い幅の画面や未描画帯が残ることがある。
+             */
+            override fun doLayout() {
+                val child = components.firstOrNull()
+                if (child != null) child.setBounds(0, 0, width.coerceAtLeast(1), height.coerceAtLeast(1))
+                super.doLayout()
+                browserForLayout?.let { browser ->
+                    browser.wasResized(width.coerceAtLeast(1), height.coerceAtLeast(1))
+                    browser.notifyScreenInfoChanged()
+                }
+            }
+        }.apply {
             isOpaque = true
             this.background = java.awt.Color(
                 (background.red * 255).toInt(),
@@ -125,6 +144,26 @@ fun NativeWebPane(
         val browser = client.createBrowser("about:blank", CefRendering.DEFAULT, false)
         browser.uiComponent.background = container.background
         container.add(browser.uiComponent, BorderLayout.CENTER)
+        browserForLayout = browser
+        val resizeListener = object : ComponentAdapter() {
+            override fun componentResized(event: ComponentEvent?) {
+                val width = container.width.coerceAtLeast(1)
+                val height = container.height.coerceAtLeast(1)
+                // live resize 中は Compose と AWT のレイアウト通知順が入れ替わることがある。
+                // 子ビューの bounds と CEF の viewport を同じイベント内で揃える。
+                browser.uiComponent.setBounds(0, 0, width, height)
+                browser.wasResized(width, height)
+                browser.notifyScreenInfoChanged()
+                // AppKit がこのイベント後に NSView のサイズを確定する場合にも追従する。
+                SwingUtilities.invokeLater {
+                    val settledWidth = container.width.coerceAtLeast(1)
+                    val settledHeight = container.height.coerceAtLeast(1)
+                    browser.uiComponent.setBounds(0, 0, settledWidth, settledHeight)
+                    browser.wasResized(settledWidth, settledHeight)
+                }
+            }
+        }
+        container.addComponentListener(resizeListener)
         // 表示中の入れ物に後から足すので、並べ直しを促す
         container.revalidate()
         container.repaint()
@@ -134,9 +173,11 @@ fun NativeWebPane(
         onDispose {
             runCatching { client.removeMessageRouter(router) }
             runCatching { router.dispose() }
+            runCatching { container.removeComponentListener(resizeListener) }
             runCatching { container.removeAll() }
             runCatching { browser.close(true) }
             runCatching { client.dispose() }
+            browserForLayout = null
             handle.browser = null
         }
     }
