@@ -229,7 +229,7 @@ private fun PreviewButtons(
     onToggleFind: () -> Unit,
 ) {
     if (onRefresh != null) {
-        FloatingButton(Icons.Default.Refresh, "プレビューを更新", small = true, onClick = onRefresh)
+        FloatingButton(Icons.Default.Refresh, "プレビューを更新", small = small, onClick = onRefresh)
     }
     if (onAdd != null) {
         FloatingButton(Icons.Default.Add, "新しいノート", accent = true, small = small, onClick = onAdd)

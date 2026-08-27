@@ -17,6 +17,7 @@ import java.awt.event.HierarchyEvent
 import java.awt.event.HierarchyListener
 import javax.swing.SwingUtilities
 import javax.swing.JPanel
+import javax.swing.Timer
 
 /**
  * ページを OS にそのまま描かせる表示 (ウインドウ描画)。
@@ -176,6 +177,20 @@ fun NativeWebPane(
         var hostWindow: Window? = null
         var lastWindowWidth = 0
         var lastWindowHeight = 0
+        var resizeRightInset: Int? = null
+        var resizeBottomInset: Int? = null
+        // componentResized には「ドラッグ終了」の通知がないため、短い無通信時間を
+        // live resize の終了として扱う。ドラッグ中は右側の幅を絶対に取り直さない。
+        val resizeEndTimer = Timer(180) {
+            resizeRightInset = null
+            resizeBottomInset = null
+            val window = hostWindow
+            val content = (window as? javax.swing.RootPaneContainer)?.contentPane
+            if (content != null) {
+                lastWindowWidth = content.width
+                lastWindowHeight = content.height
+            }
+        }.apply { isRepeats = false }
         val windowResizeListener = object : ComponentAdapter() {
             override fun componentResized(event: ComponentEvent?) {
                 val window = hostWindow ?: return
@@ -187,9 +202,15 @@ fun NativeWebPane(
                 }
 
                 val point = SwingUtilities.convertPoint(container, 0, 0, content)
-                // 直前の安定フレームにおける、プレビュー右側（境界＋エディタ）の幅。
-                val rightInset = (lastWindowWidth - point.x - container.width).coerceAtLeast(0)
-                val bottomInset = (lastWindowHeight - point.y - container.height).coerceAtLeast(0)
+                // 最初の resize イベントだけで、ドラッグ開始前の右側
+                //（境界＋エディタ）の幅を確定する。ここを毎回計算すると、Compose の
+                // 遅れた旧 bounds が差分へ混ざり、プレビューが途中で止まってしまう。
+                val rightInset = resizeRightInset ?: (lastWindowWidth - point.x - container.width)
+                    .coerceAtLeast(0)
+                    .also { resizeRightInset = it }
+                val bottomInset = resizeBottomInset ?: (lastWindowHeight - point.y - container.height)
+                    .coerceAtLeast(0)
+                    .also { resizeBottomInset = it }
                 val targetWidth = (content.width - point.x - rightInset).coerceAtLeast(1)
                 val targetHeight = (content.height - point.y - bottomInset).coerceAtLeast(1)
 
@@ -202,6 +223,7 @@ fun NativeWebPane(
 
                 lastWindowWidth = content.width
                 lastWindowHeight = content.height
+                resizeEndTimer.restart()
             }
         }
         fun attachWindowListener() {
@@ -235,6 +257,7 @@ fun NativeWebPane(
             runCatching { container.removeComponentListener(resizeListener) }
             runCatching { container.removeHierarchyListener(hierarchyListener) }
             runCatching { hostWindow?.removeComponentListener(windowResizeListener) }
+            runCatching { resizeEndTimer.stop() }
             runCatching { container.removeAll() }
             runCatching { browser.close(true) }
             runCatching { client.dispose() }

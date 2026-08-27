@@ -401,6 +401,9 @@ fun App(
                     if (it.id == note.id) it.copy(fields = draft.fields, tags = draft.tags) else it
                 }
                 selected = notes.firstOrNull { it.id == note.id } ?: note
+                // 長文などでライブプレビューを止めている場合も、保存した瞬間には
+                // 必ず保存済みの内容をプレビューへ反映する。
+                refreshPreview()
             } catch (e: Exception) {
                 message = "保存失敗: ${e.message}"
             } finally {

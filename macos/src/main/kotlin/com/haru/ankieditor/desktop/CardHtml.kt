@@ -49,8 +49,8 @@ object CardHtml {
           .anki-fab.add { background: #1E496F; } .anki-fab.add svg { fill: #D2E4FF; }
           .anki-fab.find { background: #3C4858; } .anki-fab.find svg { fill: #D8E3F8; }
           .anki-fab.edit { background: #3C4858; } .anki-fab.edit svg { fill: #D8E3F8; }
-          .anki-fab.refresh { width: 40px; height: 40px; background: #234C56; }
-          .anki-fab.refresh svg { width: 18px; height: 18px; fill: #BFE9F6; }
+          .anki-fab.refresh { background: #234C56; }
+          .anki-fab.refresh svg { fill: #BFE9F6; }
 
           .anki-side {
             /* macOS のウインドウボタン (信号機) の右に並べる */
