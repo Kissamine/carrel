@@ -10,8 +10,11 @@ import org.cef.browser.CefBrowser
 import org.cef.browser.CefRendering
 import org.cef.handler.CefLoadHandlerAdapter
 import java.awt.BorderLayout
+import java.awt.Window
 import java.awt.event.ComponentAdapter
 import java.awt.event.ComponentEvent
+import java.awt.event.HierarchyEvent
+import java.awt.event.HierarchyListener
 import javax.swing.SwingUtilities
 import javax.swing.JPanel
 
@@ -166,6 +169,60 @@ fun NativeWebPane(
             }
         }
         container.addComponentListener(resizeListener)
+
+        // Compose の再計測を待つと、macOS の live resize 中だけ NSView の幅が一拍遅れる。
+        // ウインドウの resize イベントから、安定時の右・下余白を保った新しい bounds を
+        // 直接算出し、同じイベント内で Chromium まで反映する。
+        var hostWindow: Window? = null
+        var lastWindowWidth = 0
+        var lastWindowHeight = 0
+        val windowResizeListener = object : ComponentAdapter() {
+            override fun componentResized(event: ComponentEvent?) {
+                val window = hostWindow ?: return
+                val content = (window as? javax.swing.RootPaneContainer)?.contentPane ?: return
+                if (lastWindowWidth <= 0 || lastWindowHeight <= 0 || container.parent == null) {
+                    lastWindowWidth = content.width
+                    lastWindowHeight = content.height
+                    return
+                }
+
+                val point = SwingUtilities.convertPoint(container, 0, 0, content)
+                // 直前の安定フレームにおける、プレビュー右側（境界＋エディタ）の幅。
+                val rightInset = (lastWindowWidth - point.x - container.width).coerceAtLeast(0)
+                val bottomInset = (lastWindowHeight - point.y - container.height).coerceAtLeast(0)
+                val targetWidth = (content.width - point.x - rightInset).coerceAtLeast(1)
+                val targetHeight = (content.height - point.y - bottomInset).coerceAtLeast(1)
+
+                container.setSize(targetWidth, targetHeight)
+                browser.uiComponent.setBounds(0, 0, targetWidth, targetHeight)
+                browser.wasResized(targetWidth, targetHeight)
+                browser.notifyScreenInfoChanged()
+                container.revalidate()
+                container.repaint()
+
+                lastWindowWidth = content.width
+                lastWindowHeight = content.height
+            }
+        }
+        fun attachWindowListener() {
+            val found = SwingUtilities.getWindowAncestor(container) ?: return
+            if (hostWindow === found) return
+            hostWindow?.removeComponentListener(windowResizeListener)
+            hostWindow = found
+            val content = (found as? javax.swing.RootPaneContainer)?.contentPane
+            lastWindowWidth = content?.width ?: found.width
+            lastWindowHeight = content?.height ?: found.height
+            found.addComponentListener(windowResizeListener)
+        }
+        val hierarchyListener = HierarchyListener { event ->
+            if (event.changeFlags and HierarchyEvent.DISPLAYABILITY_CHANGED.toLong() != 0L ||
+                event.changeFlags and HierarchyEvent.PARENT_CHANGED.toLong() != 0L
+            ) {
+                SwingUtilities.invokeLater { attachWindowListener() }
+            }
+        }
+        container.addHierarchyListener(hierarchyListener)
+        SwingUtilities.invokeLater { attachWindowListener() }
         // 表示中の入れ物に後から足すので、並べ直しを促す
         container.revalidate()
         container.repaint()
@@ -176,6 +233,8 @@ fun NativeWebPane(
             runCatching { client.removeMessageRouter(router) }
             runCatching { router.dispose() }
             runCatching { container.removeComponentListener(resizeListener) }
+            runCatching { container.removeHierarchyListener(hierarchyListener) }
+            runCatching { hostWindow?.removeComponentListener(windowResizeListener) }
             runCatching { container.removeAll() }
             runCatching { browser.close(true) }
             runCatching { client.dispose() }
