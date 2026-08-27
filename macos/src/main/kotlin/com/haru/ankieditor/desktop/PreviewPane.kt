@@ -68,23 +68,38 @@ fun PreviewPane(
     // ノートを選ぶまではカードの白地を出さず、アプリの地色のままにする
     val hasCard = note != null && html != null
     // ページ自体に操作を持たせる (OS に描かせる方式では上に重ねられないため)
-    val page = remember(
-        html, onEdit != null, onAdd != null, findable, onRefresh != null, onShowList != null,
-        onUndo != null, onRedo != null,
-    ) {
+    // 操作ボタンの表示状態は本文HTMLから分離する。編集画面を開閉するだけで
+    // bodyを差し替えたりJCEFを再描画したりしない。
+    val page = remember(html) {
         html?.let {
             it.replace(
                 "</body>",
                 CardHtml.overlay(
-                    canEdit = onEdit != null,
-                    canAdd = onAdd != null,
-                    canFind = findable,
-                    canRefresh = onRefresh != null,
-                    canShowList = onShowList != null,
-                    canUndo = onUndo != null,
-                    canRedo = onRedo != null,
+                    canEdit = true,
+                    canAdd = true,
+                    canFind = true,
+                    canRefresh = true,
+                    canShowList = true,
+                    canUndo = true,
+                    canRedo = true,
                 ) + "</body>",
             )
+        }
+    }
+    val controlsScript = remember(
+        onEdit != null, onAdd != null, findable, onRefresh != null,
+        onShowList != null, onUndo != null, onRedo != null,
+    ) {
+        mapOf(
+            "ankiEdit" to (onEdit != null),
+            "ankiAdd" to (onAdd != null),
+            "ankiFindOpen" to findable,
+            "ankiRefresh" to (onRefresh != null),
+            "ankiShowList" to (onShowList != null),
+            "ankiUndo" to (onUndo != null),
+            "ankiRedo" to (onRedo != null),
+        ).entries.joinToString(";") { (id, shown) ->
+            "(function(e){if(e)e.style.display='${if (shown) "flex" else "none"}'})(document.getElementById('$id'))"
         }
     }
 
@@ -102,6 +117,7 @@ fun PreviewPane(
             lockWidthDuringWindowResize = lockWidthDuringWindowResize,
             onPageReady = {
                 handle.run(com.haru.ankieditor.PreviewFindJs.script)
+                handle.run(controlsScript)
                 if (handle.browser?.url?.contains(pageName) == true) {
                     webReady = true
                 }
@@ -182,6 +198,14 @@ fun PreviewPane(
 
         LaunchedEffect(findRequest) {
             if (findRequest > 0) handle.run("window.__ankiFindOpen && window.__ankiFindOpen()")
+        }
+
+        // ボタンだけを表示・非表示にする。本文やviewportには触れない。
+        LaunchedEffect(
+            onEdit != null, onAdd != null, findable, onRefresh != null,
+            onShowList != null, onUndo != null, onRedo != null,
+        ) {
+            handle.run(controlsScript)
         }
 
         PreviewStatus(statusMessage, syncing, Modifier.align(Alignment.BottomCenter))

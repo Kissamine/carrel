@@ -381,14 +381,22 @@ fun App(
         val note = selected ?: return
         loadDraft(note)
         editorMode = prefs.editorMode
-        // 現在のプレビュー幅はそのまま残し、編集列のぶんだけ右へ広げる。
-        onResizeWindowBy(editorWidth.value + 10f)
         editing = true
+        // 先に再構成してJCEFを「幅固定」状態へ移してから、外側だけを広げる。
+        scope.launch {
+            delay(20)
+            onResizeWindowBy(editorWidth.value + 10f)
+        }
     }
 
     fun stopEditing() {
-        if (editing) onResizeWindowBy(-(editorWidth.value + 10f))
+        val closingWidth = editorWidth.value + 10f
         editing = false
+        // JCEFはeditorShownが0になるまで固定されたまま。外側と編集欄だけを閉じる。
+        scope.launch {
+            delay(20)
+            onResizeWindowBy(-closingWidth)
+        }
         dirty = false
         if (creating) {
             creating = false
