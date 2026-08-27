@@ -1,0 +1,23 @@
+# ビルド成果物
+build/
+.gradle/
+.kotlin/
+app/build/
+macos/build/
+*.apk
+*.dmg
+
+# 大きい実行環境 (手順書のとおり再取得する)
+macos/runtime/
+macos/.venv/
+macos/appresources/
+
+# 署名鍵 (絶対に共有しない)
+keystore.properties
+*.jks
+*.keystore
+
+# エディタ / OS
+.idea/
+.DS_Store
+local.properties
