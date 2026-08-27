@@ -182,13 +182,13 @@ private fun launchApp() = application {
                                 val from = window.width.toFloat()
                                 val target = (from + delta)
                                     .coerceAtLeast(window.minimumSize.width.toFloat())
-                                widthAnimation = windowScope.launch {
-                                    Animatable(from).animateTo(
-                                        target,
-                                        animationSpec = tween(280, easing = FastOutSlowInEasing),
-                                    ) {
-                                        window.size = Dimension(value.toInt(), window.height)
-                                    }
+                                // 呼び出し元をアニメーション完了まで待たせる。
+                                // これにより、エディタ列は必要な横幅が確保された後にだけ現れる。
+                                Animatable(from).animateTo(
+                                    target,
+                                    animationSpec = tween(280, easing = FastOutSlowInEasing),
+                                ) {
+                                    window.size = Dimension(value.toInt(), window.height)
                                 }
                             }
                         },

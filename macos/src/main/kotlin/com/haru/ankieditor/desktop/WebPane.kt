@@ -58,6 +58,14 @@ class WebHandle {
     /** 読み込み済みの内容の目印 (同じものを二度読み込まないため) */
     internal var loadedTag: String? = null
 
+    /**
+     * Compose が決めた表示領域の大きさ (実ピクセル)。
+     * ネイティブ表示は必ずこれに合わせる。これを唯一の正とすることで、
+     * ウインドウの拡縮を独自に追従した結果と食い違ったまま残るのを防ぐ
+     */
+    @Volatile
+    internal var desiredSize: androidx.compose.ui.unit.IntSize? = null
+
     /** ネイティブ側の用意ができたか。できる前の読み込み命令は捨てられてしまう */
     @Volatile
     internal var created = false

@@ -1,5 +1,6 @@
 package com.haru.ankieditor.desktop
 
+
 import com.haru.ankieditor.MediaKind
 import com.haru.ankieditor.UnusedMedia
 import com.haru.ankieditor.formatSize
@@ -14,6 +15,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Movie
+import androidx.compose.material.icons.rounded.InsertDriveFile
+import androidx.compose.material.icons.rounded.Movie
+import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -81,9 +85,9 @@ fun MediaThumb(
         } else {
             Icon(
                 when (kind) {
-                    MediaKind.VIDEO -> Icons.Default.Movie
-                    MediaKind.AUDIO -> Icons.Default.MusicNote
-                    else -> Icons.Default.InsertDriveFile
+                    MediaKind.VIDEO -> Icons.Rounded.Movie
+                    MediaKind.AUDIO -> Icons.Rounded.MusicNote
+                    else -> Icons.Rounded.InsertDriveFile
                 },
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,

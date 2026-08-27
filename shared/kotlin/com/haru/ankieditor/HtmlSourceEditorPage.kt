@@ -67,7 +67,8 @@ $fields
     },
     onFieldChanged: function (i, v) { this.send('field:' + i + ':' + v); },
     onFocus: function (i) { this.send('focus:' + i); },
-    onBlur: function () { this.send('blur'); }
+    onBlur: function () { this.send('blur'); },
+    onCommand: function (name) { this.send('command:' + name); }
   } : null);
   var timers = {};
   // 検索の状態。paint から findRefresh を呼ぶので、先に用意しておく
@@ -122,9 +123,20 @@ $fields
   // それを超える欄はその中でスクロールする (際限なく伸ばすと WebView が描画しきれない)
   function fit(ta) {
     var limit = Math.max(320, window.innerHeight);
+    // 高さを測り直すと表示位置が飛ぶので、元の位置を覚えて必ず戻す
+    var scroll = ta.scrollTop;
+    var pageScroll = window.scrollY;
+    var before = ta.style.height;
     ta.style.height = 'auto';
-    var wanted = ta.scrollHeight + 2;
-    ta.style.height = Math.min(wanted, limit) + 'px';
+    var next = Math.min(ta.scrollHeight + 2, limit) + 'px';
+    ta.style.height = next;
+    if (next !== before) {
+      // 高さが変わったときだけ、位置を戻す必要がある
+      ta.scrollTop = scroll;
+      window.scrollTo(0, pageScroll);
+    } else {
+      ta.scrollTop = scroll;
+    }
     var hl = document.getElementById('hl' + ta.dataset.index);
     if (hl) hl.scrollTop = ta.scrollTop;
   }
@@ -189,6 +201,17 @@ $fields
     // VS Code と同じキー操作
     ta.addEventListener('keydown', function (e) {
       var cmd = e.metaKey || e.ctrlKey;
+      // 保存と検索は、入力中でも効くようにページ側でも受ける
+      if (cmd && (e.key === 's' || e.key === 'S')) {
+        e.preventDefault();
+        if (bridge) { bridge.onFieldChanged(index, ta.value); bridge.onCommand('save'); }
+        return;
+      }
+      if (cmd && (e.key === 'f' || e.key === 'F')) {
+        e.preventDefault();
+        if (bridge) bridge.onCommand('find');
+        return;
+      }
       // Enter は今の行の字下げを引き継ぐ。Shift+Enter は行頭から
       if (e.key === 'Enter' && !cmd && !e.altKey) {
         e.preventDefault();
@@ -357,6 +380,8 @@ $fields
     }
     html += highlight(value.slice(last));
     hl.innerHTML = html + '\n';
+    // innerHTML を入れ直すとレイヤの位置が 0 に戻るので、入力欄にそろえ直す
+    hl.scrollTop = ta.scrollTop;
   }
 
   function show(step) {
@@ -364,14 +389,34 @@ $fields
     find.current = (find.current + step + find.hits.length) % find.hits.length;
     var hit = find.hits[find.current];
     var ta = document.getElementById('ta' + hit.field);
-    ta.focus({ preventScroll: true });
+    // ここで入力欄に焦点を移すと、検索欄に打った続きが本文に入ってしまう。
+    // 選択範囲だけ入れておき、焦点は検索を閉じるときに移す
     ta.setSelectionRange(hit.at, hit.at + find.query.length);
     document.querySelectorAll('textarea').forEach(function (t) {
       findRefresh(parseInt(t.dataset.index, 10));
     });
+    // 見た目 (色レイヤ) だけを動かすと、入力欄との対応がずれて
+    // 「見えている場所」と「実際に打つ場所」が食い違ってしまう。
+    // 必ず入力欄そのものをスクロールし、色レイヤはそれに追従させる
     var mark = document.querySelector('#hl' + hit.field + ' mark.cur');
-    if (mark) mark.scrollIntoView({ block: 'center' });
+    if (mark) {
+      var target = mark.offsetTop - ta.clientHeight / 2;
+      ta.scrollTop = Math.max(0, target);
+      syncLayer(hit.field);
+      // ページ側も、見つけた場所が画面の中ほどに来るように送る
+      var wrap = ta.parentNode;
+      var y = wrap.getBoundingClientRect().top + window.scrollY +
+              (mark.offsetTop - ta.scrollTop) - window.innerHeight / 2;
+      window.scrollTo(0, Math.max(0, y));
+    }
     return find.current + 1;
+  }
+
+  // 色レイヤの位置を入力欄にそろえる (innerHTML を入れ直すと 0 に戻るため)
+  function syncLayer(index) {
+    var ta = document.getElementById('ta' + index);
+    var hl = document.getElementById('hl' + index);
+    if (ta && hl) hl.scrollTop = ta.scrollTop;
   }
 
   window.__ankiSource = {
@@ -388,10 +433,19 @@ $fields
     },
     move: function (step) { return show(step); },
     clear: function () {
+      var stay = find.hits[find.current];
       find.query = ''; find.hits = []; find.current = -1;
       document.querySelectorAll('textarea').forEach(function (t) {
         paint(parseInt(t.dataset.index, 10));
       });
+      // 直前に飛んだ場所に留まる (閉じた拍子に先頭へ戻らないように)
+      if (stay) {
+        var ta = document.getElementById('ta' + stay.field);
+        if (ta) {
+          ta.focus({ preventScroll: true });
+          ta.setSelectionRange(stay.at, stay.at);
+        }
+      }
     },
     index: function () { return find.current + 1; },
     // カーソル位置に差し込む (画像や動画の挿入に使う)
@@ -405,6 +459,14 @@ $fields
       paint(i);
       if (bridge) bridge.onFieldChanged(i, ta.value);
       thumbs(i);
+    },
+    // いまの内容をすぐ外へ伝える (保存の直前に呼ぶ)
+    flush: function () {
+      document.querySelectorAll('textarea').forEach(function (ta) {
+        var i = parseInt(ta.dataset.index, 10);
+        clearTimeout(timers[i]);
+        if (bridge) bridge.onFieldChanged(i, ta.value);
+      });
     },
     // 外から内容を入れ直す (モードの切り替えなど)
     setValue: function (index, text) {

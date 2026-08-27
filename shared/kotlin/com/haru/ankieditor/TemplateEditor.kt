@@ -5,6 +5,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.rounded.ArrowDropDown
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -68,7 +70,7 @@ fun TemplateEditor(
         Box {
             OutlinedButton(onClick = { open = true }, shape = CircleShape) {
                 Text(loaded?.name ?: "選択してください")
-                Icon(Icons.Default.ArrowDropDown, contentDescription = null)
+                Icon(Icons.Rounded.ArrowDropDown, contentDescription = null)
             }
             DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
                 notetypes.forEach { (id, name) ->
@@ -124,7 +126,7 @@ fun TemplateEditor(
                         }
                     },
                 ) {
-                    Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Icon(Icons.Rounded.Check, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(4.dp))
                     Text("保存")
                 }

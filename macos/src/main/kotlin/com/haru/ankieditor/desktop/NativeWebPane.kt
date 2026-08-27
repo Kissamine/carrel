@@ -4,6 +4,7 @@ import androidx.compose.runtime.*
 import androidx.compose.foundation.layout.size
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.awt.SwingPanel
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import org.cef.browser.CefBrowser
@@ -195,11 +196,32 @@ fun NativeWebPane(
                 lastWindowWidth = content.width
                 lastWindowHeight = content.height
             }
+            // ドラッグ中の予測で合わせた幅を、Compose が決めた値へ収束させる
+            applyDesiredSize(handle, container)
         }.apply { isRepeats = false }
         val windowResizeListener = object : ComponentAdapter() {
             override fun componentResized(event: ComponentEvent?) {
                 val window = hostWindow ?: return
                 val content = (window as? javax.swing.RootPaneContainer)?.contentPane ?: return
+
+                // 編集欄の開閉中と編集中は、プレビュー幅は Compose 側で明示的に固定済み。
+                // ここでウインドウ全体の新しい幅から JCEF の幅を再計算すると、
+                // エディタ用に増やした領域までプレビューが取り込み、設定上の最大幅へ
+                // 跳ねる。固定中はネイティブ View に一切サイズを書き込まず、
+                // SwingPanel の通常レイアウトだけに任せる。
+                if (lockWidth.value) {
+                    resizeEndTimer.stop()
+                    resizeRightInset = null
+                    resizeBottomInset = null
+                    resizeStartWidth = null
+                    lastWindowWidth = content.width
+                    lastWindowHeight = content.height
+                    // 何もしないと、直前に自分で書き込んだ幅がそのまま残ってしまう。
+                    // Compose が決めた大きさへ必ず戻す
+                    applyDesiredSize(handle, container)
+                    return
+                }
+
                 if (lastWindowWidth <= 0 || lastWindowHeight <= 0 || container.parent == null) {
                     lastWindowWidth = content.width
                     lastWindowHeight = content.height
@@ -216,13 +238,8 @@ fun NativeWebPane(
                 val bottomInset = resizeBottomInset ?: (lastWindowHeight - point.y - container.height)
                     .coerceAtLeast(0)
                     .also { resizeBottomInset = it }
-                val startWidth = resizeStartWidth ?: container.width.coerceAtLeast(1)
-                    .also { resizeStartWidth = it }
-                val targetWidth = if (lockWidth.value) {
-                    startWidth
-                } else {
-                    (content.width - point.x - rightInset).coerceAtLeast(1)
-                }
+                resizeStartWidth = resizeStartWidth ?: container.width.coerceAtLeast(1)
+                val targetWidth = (content.width - point.x - rightInset).coerceAtLeast(1)
                 val targetHeight = (content.height - point.y - bottomInset).coerceAtLeast(1)
 
                 container.setSize(targetWidth, targetHeight)
@@ -333,4 +350,28 @@ private fun parseCssColor(raw: String?): java.awt.Color? {
     val numbers = Regex("\\d+").findAll(raw ?: return null).map { it.value.toInt() }.toList()
     if (numbers.size < 3) return null
     return java.awt.Color(numbers[0], numbers[1], numbers[2])
+}
+
+
+/**
+ * Compose が決めた大きさを、ネイティブ表示へ書き込む。
+ *
+ * ウインドウの拡縮に追従するため一時的に自前で幅を書き込むことがあるが、
+ * 最後は必ずこの値へ戻す。そうしないと、エディタを開くための拡張を
+ * プレビューが取り込んだまま残ってしまう。
+ */
+private fun applyDesiredSize(handle: WebHandle, container: javax.swing.JComponent) {
+    val size = handle.desiredSize ?: return
+    val width = size.width.coerceAtLeast(1)
+    val height = size.height.coerceAtLeast(1)
+    javax.swing.SwingUtilities.invokeLater {
+        if (container.width == width && container.height == height) return@invokeLater
+        container.setSize(width, height)
+        handle.browser?.let { browser ->
+            browser.uiComponent.setBounds(0, 0, width, height)
+            browser.wasResized(width, height)
+        }
+        container.revalidate()
+        container.repaint()
+    }
 }

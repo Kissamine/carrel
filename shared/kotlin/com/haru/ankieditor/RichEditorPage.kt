@@ -57,6 +57,13 @@ object RichEditorPage {
               .rounded-text { padding: .2em .4em; border-radius: 5px; background: #45474a; }
             </style>
             <script>
+        // いまの内容をすぐ外へ伝える (保存の直前に呼ぶ)
+        window.__ankiFlush = function () {
+          document.querySelectorAll('.field').forEach(function (field) {
+            var i = parseInt(field.dataset.index, 10);
+            if (window.${bridge}) window.${bridge}.onFieldChanged(i, field.innerHTML);
+          });
+        };
             // Chromium (macOS 版) では窓口が注入されないので、同じ名前で用意する
             if (!window.${bridge}) {
               window.${bridge} = {

@@ -25,6 +25,8 @@ import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.rememberScrollState
@@ -127,6 +129,10 @@ fun EditorPane(
     onSave: () -> Unit,
     onClose: () -> Unit,
     onRefreshPreview: (() -> Unit)? = null,
+    /** Ctrl+F が押された回数。増えたら検索欄へ移る */
+    findRequest: Int = 0,
+    /** 「いまの内容をすぐ伝える」手段を、外へ渡すための口 */
+    onProvideFlush: (() -> Unit) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val scope = rememberCoroutineScope()
@@ -155,6 +161,13 @@ fun EditorPane(
 
     var richWebView by remember(note.id) { mutableStateOf<WebView?>(null) }
     var sourceWebView by remember(note.id) { mutableStateOf<WebView?>(null) }
+    // 保存の直前に呼ばれる。ページ側の入力をすぐ吸い上げる
+    LaunchedEffect(sourceWebView, richWebView) {
+        onProvideFlush {
+            sourceWebView?.evaluateJavascript("window.__ankiSource.flush()", null)
+            richWebView?.evaluateJavascript("window.__ankiFlush && window.__ankiFlush()", null)
+        }
+    }
 
     // どのフィールドにカーソルがあるか (null = どこにもない)
     var focusedField by remember(note.id) { mutableStateOf<Int?>(null) }
@@ -170,6 +183,16 @@ fun EditorPane(
     var findQuery by remember(note.id) { mutableStateOf("") }
     var findIndex by remember(note.id) { mutableIntStateOf(0) }
     var findTotal by remember(note.id) { mutableIntStateOf(0) }
+    val findFieldFocus = remember { FocusRequester() }
+    LaunchedEffect(findRequest) {
+        if (findRequest <= 0) return@LaunchedEffect
+        // 編集用のページに入力の焦点があると、検索欄へ移っても打鍵がページ側へ行く。
+        // 先にページ側の焦点を外してから移す
+        richWebView?.clearFocus()
+        sourceWebView?.clearFocus()
+        kotlinx.coroutines.delay(30)
+        runCatching { findFieldFocus.requestFocus() }
+    }
     var videoDialog by remember { mutableStateOf(false) }
 
     // 他アプリでコピーされた画像を検知して、貼り付けを提案する
@@ -655,6 +678,7 @@ fun EditorPane(
                         richWebView?.clearMatches()
                         sourceWebView?.evaluateJavascript("window.__ankiSource.clear()", null)
                     },
+                    focusRequester = findFieldFocus,
                 )
                 Spacer(Modifier.width(8.dp))
                 // 検索中は件数と前後ボタンが入ってくるので、
@@ -787,6 +811,21 @@ fun EditorPane(
                 mediaDir = mediaDir,
                 onFieldsChange = { publishFields(it) },
                 onFocusChanged = { focusedField = it },
+                onCommand = { name ->
+                    when (name) {
+                        // ページ側は保存の直前に今の内容を送ってくるので、
+                        // それが届いてから保存する
+                        "save" -> scope.launch {
+                            kotlinx.coroutines.delay(60)
+                            onSave()
+                        }
+                        "find" -> scope.launch {
+                            sourceWebView?.clearFocus()
+                            kotlinx.coroutines.delay(30)
+                            runCatching { findFieldFocus.requestFocus() }
+                        }
+                    }
+                },
                 onWebViewReady = { sourceWebView = it },
                 modifier = Modifier.weight(1f).fillMaxWidth(),
             )
@@ -812,7 +851,7 @@ fun EditorPane(
             tags = tags,
             allTags = allTags,
             onTagsChange = { publishTags(it) },
-            modifier = Modifier.fillMaxWidth().padding(12.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
         )
     }
 }
@@ -1421,20 +1460,27 @@ private fun TagEditor(
 
     fun set(list: List<String>) = onTagsChange(list.distinct().joinToString(" "))
 
-    Column(modifier) {
+    // 「タグ」の見出しと中身を 1 行に並べる (縦の場所を取らないように)。
+    // 幅を超えたぶんは横スクロールで、右端はグラデーションで自然に消す
+    Row(modifier, verticalAlignment = Alignment.CenterVertically) {
         Text(
             "タグ",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        Spacer(Modifier.height(4.dp))
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            selected.forEach { tag ->
+        Spacer(Modifier.width(10.dp))
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            contentPadding = PaddingValues(end = 12.dp),
+            modifier = Modifier.weight(1f).fadingRightEdge(20.dp),
+        ) {
+            items(selected, key = { it }) { tag ->
                 InputChip(
                     selected = true,
                     onClick = { set(selected - tag) },
                     shape = CircleShape,
-                    modifier = Modifier.height(32.dp),
+                    modifier = Modifier.height(30.dp),
                     label = { Text(formatTag(tag), style = MaterialTheme.typography.labelMedium) },
                     trailingIcon = {
                         Icon(
@@ -1445,15 +1491,21 @@ private fun TagEditor(
                     },
                 )
             }
-            AssistChip(
-                onClick = { picker = true },
-                shape = CircleShape,
-                modifier = Modifier.height(32.dp),
-                leadingIcon = {
-                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
-                },
-                label = { Text("タグを追加", style = MaterialTheme.typography.labelMedium) },
-            )
+            item {
+                AssistChip(
+                    onClick = { picker = true },
+                    shape = CircleShape,
+                    modifier = Modifier.height(30.dp),
+                    leadingIcon = {
+                        Icon(
+                            Icons.Default.Add,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                        )
+                    },
+                    label = { Text("タグを追加", style = MaterialTheme.typography.labelMedium) },
+                )
+            }
         }
     }
 
@@ -1576,8 +1628,8 @@ private fun RichTextFields(
     val dirState = rememberUpdatedState(mediaDir)
 
     // 本文が長いと loadDataWithBaseURL では途中で切れるため、ローカル URL として配る
-    val pageName = remember(note.id, fieldNames, initialFields) {
-        "__rich_${note.id}_${System.identityHashCode(initialFields)}.html".also {
+    val pageName = remember(note.id, fieldNames) {
+        "__rich_${note.id}_${System.nanoTime()}.html".also {
             EditorPages.put(it, RichEditorPage.build(fieldNames, initialFields, "AnkiEditorBridge"))
         }
     }
@@ -1724,10 +1776,14 @@ private fun NoteFindBar(
     onQueryChange: (String) -> Unit,
     onMove: (Boolean) -> Unit,
     onClear: () -> Unit,
+    focusRequester: FocusRequester,
     modifier: Modifier = Modifier,
     compact: Boolean = false,
 ) {
     val interaction = remember { MutableInteractionSource() }
+    // Enter で確定したか (確定後は矢印で一致箇所を移動する)
+    var confirmed by remember { mutableStateOf(false) }
+    LaunchedEffect(query) { if (query.isBlank()) confirmed = false }
     Row(modifier, verticalAlignment = Alignment.CenterVertically) {
         Icon(
             Icons.Default.Search,
@@ -1738,8 +1794,35 @@ private fun NoteFindBar(
         Spacer(Modifier.width(6.dp))
         BasicTextField(
             value = query,
-            onValueChange = onQueryChange,
-            modifier = Modifier.weight(1f).widthIn(min = 120.dp).height(TOOLBAR_ITEM_HEIGHT),
+            onValueChange = { confirmed = false; onQueryChange(it) },
+            modifier = Modifier
+                .weight(1f)
+                .widthIn(min = 120.dp)
+                .height(TOOLBAR_ITEM_HEIGHT)
+                .focusRequester(focusRequester)
+                // Enter で確定したあとは、← → で一致箇所を行き来できる
+                .onPreviewKeyEvent { event ->
+                    if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                    when {
+                        event.key == androidx.compose.ui.input.key.Key.Enter -> {
+                            confirmed = true
+                            onMove(!event.isShiftPressed)
+                            true
+                        }
+
+                        confirmed && event.key == androidx.compose.ui.input.key.Key.DirectionLeft -> {
+                            onMove(false)
+                            true
+                        }
+
+                        confirmed && event.key == androidx.compose.ui.input.key.Key.DirectionRight -> {
+                            onMove(true)
+                            true
+                        }
+
+                        else -> false
+                    }
+                },
             textStyle = MaterialTheme.typography.labelMedium
                 .copy(color = MaterialTheme.colorScheme.onSurface),
             singleLine = true,
@@ -1928,17 +2011,19 @@ private fun HtmlSourceFields(
     mediaDir: File,
     onFieldsChange: (List<String>) -> Unit,
     onFocusChanged: (Int?) -> Unit,
+    onCommand: (String) -> Unit,
     onWebViewReady: (WebView) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val latestChange by rememberUpdatedState(onFieldsChange)
     val latestFocus by rememberUpdatedState(onFocusChanged)
+    val latestCommand by rememberUpdatedState(onCommand)
     val current = remember(note.id) { initialFields.toMutableList() }
     val dirState = rememberUpdatedState(mediaDir)
 
     // ページはローカル URL として配る (大きい本文でも切れないように)
-    val pageName = remember(note.id, fieldNames, initialFields) {
-        "__source_${note.id}_${System.identityHashCode(initialFields)}.html".also {
+    val pageName = remember(note.id, fieldNames) {
+        "__source_${note.id}_${System.nanoTime()}.html".also {
             EditorPages.put(
                 it,
                 HtmlSourceEditorPage.build(fieldNames, initialFields, "AnkiSourceBridge"),
@@ -1981,6 +2066,9 @@ private fun HtmlSourceFields(
 
                         @JavascriptInterface
                         fun onBlur() = latestFocus(null)
+
+                        @JavascriptInterface
+                        fun onCommand(name: String) = latestCommand(name)
                     },
                     "AnkiSourceBridge",
                 )

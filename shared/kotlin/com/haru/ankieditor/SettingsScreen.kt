@@ -21,6 +21,15 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Style
 import androidx.compose.material.icons.filled.Sell
 import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.rounded.AccountCircle
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
+import androidx.compose.material.icons.rounded.PermMedia
+import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.Sell
+import androidx.compose.material.icons.rounded.Style
+import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -34,13 +43,13 @@ enum class SettingsSection(
     val title: String,
     val icon: ImageVector,
 ) {
-    ACCOUNT("アカウントと同期", Icons.Default.AccountCircle),
-    SEARCH("検索", Icons.Default.Search),
-    TAGS("タグ", Icons.Default.Sell),
-    EDITOR("編集", Icons.Default.Edit),
-    TEMPLATE("カードの見た目", Icons.Default.Style),
-    MEDIA("メディアの整理", Icons.Default.PermMedia),
-    APPEARANCE("表示", Icons.Default.Visibility),
+    ACCOUNT("アカウントと同期", Icons.Rounded.AccountCircle),
+    SEARCH("検索", Icons.Rounded.Search),
+    TAGS("タグ", Icons.Rounded.Sell),
+    EDITOR("編集", Icons.Rounded.Edit),
+    TEMPLATE("カードの見た目", Icons.Rounded.Style),
+    MEDIA("メディアの整理", Icons.Rounded.PermMedia),
+    APPEARANCE("表示", Icons.Rounded.Visibility),
 }
 
 /**
@@ -77,7 +86,7 @@ fun SettingsScreen(
                     IconButton(onClick = {
                         if (!twoPane && section != null) section = null else onBack()
                     }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "戻る")
+                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "戻る")
                     }
                 },
             )
@@ -177,7 +186,7 @@ private fun SectionList(
                 },
                 trailingContent = {
                     Icon(
-                        Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                        Icons.AutoMirrored.Rounded.KeyboardArrowRight,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -232,7 +241,7 @@ fun <T> SettingsPicker(
                         modifier = Modifier.widthIn(max = 160.dp),
                     )
                     Icon(
-                        Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                        Icons.AutoMirrored.Rounded.KeyboardArrowRight,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

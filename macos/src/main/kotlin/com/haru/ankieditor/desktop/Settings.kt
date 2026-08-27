@@ -1,5 +1,6 @@
 package com.haru.ankieditor.desktop
 
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
@@ -9,6 +10,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -81,7 +83,7 @@ fun SettingsDialog(
                 Text("設定", style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.weight(1f))
                 IconButton(onClick = onDismiss, modifier = Modifier.size(28.dp)) {
-                    Icon(Icons.Default.Close, "閉じる", Modifier.size(16.dp))
+                    Icon(Icons.Rounded.Close, "閉じる", Modifier.size(16.dp))
                 }
             }
             HorizontalDivider()

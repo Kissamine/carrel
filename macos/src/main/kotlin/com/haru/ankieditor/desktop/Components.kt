@@ -1,5 +1,6 @@
 package com.haru.ankieditor.desktop
 
+
 import androidx.compose.animation.*
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloat
@@ -24,6 +25,14 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.rounded.ArrowDropDown
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowLeft
+import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.automirrored.rounded.Sort
+import androidx.compose.material.icons.rounded.Sync
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -99,12 +108,12 @@ fun SearchControls(
                                 )
                             },
                             leadingIcon = {
-                                Icon(Icons.Default.Search, null, Modifier.size(18.dp))
+                                Icon(Icons.Rounded.Search, null, Modifier.size(18.dp))
                             },
                             trailingIcon = {
                                 if (keyword.isNotEmpty()) {
                                     IconButton(onClick = { onKeyword("") }, modifier = Modifier.size(28.dp)) {
-                                        Icon(Icons.Default.Close, "クリア", Modifier.size(16.dp))
+                                        Icon(Icons.Rounded.Close, "クリア", Modifier.size(16.dp))
                                     }
                                 }
                             },
@@ -123,17 +132,17 @@ fun SearchControls(
             Spacer(Modifier.width(2.dp))
             TooltipIconButton(
                 "同期",
-                Icons.Default.Sync,
+                Icons.Rounded.Sync,
                 enabled = !syncing,
                 iconModifier = Modifier.graphicsLayer {
                     rotationZ = if (syncing) syncRotation else 0f
                 },
                 onClick = onSync,
             )
-            TooltipIconButton("設定", Icons.Default.Settings, onClick = onSettings)
+            TooltipIconButton("設定", Icons.Rounded.Settings, onClick = onSettings)
             TooltipIconButton(
                 "一覧をしまう",
-                Icons.AutoMirrored.Filled.KeyboardArrowLeft,
+                Icons.AutoMirrored.Rounded.KeyboardArrowLeft,
                 onClick = onHideList,
             )
         }
@@ -158,7 +167,7 @@ fun SearchControls(
                                 maxLines = 1,
                             )
                         },
-                        trailingIcon = { Icon(Icons.Default.ArrowDropDown, null, Modifier.size(16.dp)) },
+                        trailingIcon = { Icon(Icons.Rounded.ArrowDropDown, null, Modifier.size(16.dp)) },
                     )
                     DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
                         DropdownMenuItem(
@@ -212,16 +221,16 @@ fun ResultHeader(count: Int, error: String?, sort: SortMode, onSort: (SortMode) 
                 contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
                 modifier = Modifier.height(30.dp),
             ) {
-                Icon(Icons.AutoMirrored.Filled.Sort, null, Modifier.size(16.dp))
+                Icon(Icons.AutoMirrored.Rounded.Sort, null, Modifier.size(16.dp))
                 Spacer(Modifier.width(4.dp))
                 Text(sort.label, style = MaterialTheme.typography.labelMedium)
-                Icon(Icons.Default.ArrowDropDown, null, Modifier.size(18.dp))
+                Icon(Icons.Rounded.ArrowDropDown, null, Modifier.size(18.dp))
             }
             DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
                 SortMode.entries.forEach { mode ->
                     DropdownMenuItem(
                         text = { Text(mode.label) },
-                        trailingIcon = { if (mode == sort) Icon(Icons.Default.Check, null) },
+                        trailingIcon = { if (mode == sort) Icon(Icons.Rounded.Check, null) },
                         onClick = { onSort(mode); open = false },
                     )
                 }

@@ -78,6 +78,8 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
@@ -103,6 +105,32 @@ import java.io.File
 import kotlin.math.roundToInt
 
 class MainActivity : ComponentActivity() {
+
+    /**
+     * ハードウェアキーボードのショートカット。画面側から差し込む。
+     * 入力欄にフォーカスがあっても届くよう、Activity で受けている
+     */
+    var shortcutHandler: ((android.view.KeyEvent) -> Boolean)? = null
+
+    /** Ctrl+○ の組み合わせは、この経路でも届く (入力中はこちらだけのことがある) */
+    override fun onKeyShortcut(keyCode: Int, event: android.view.KeyEvent): Boolean {
+        if (shortcutHandler?.invoke(event) == true) return true
+        return super.onKeyShortcut(keyCode, event)
+    }
+
+    override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
+        android.util.Log.d(
+            "AnkiEditorKeys",
+            "code=${event.keyCode} ctrl=${event.isCtrlPressed} action=${event.action} " +
+                "handler=${shortcutHandler != null}",
+        )
+        if (event.action == android.view.KeyEvent.ACTION_DOWN &&
+            shortcutHandler?.invoke(event) == true
+        ) {
+            return true
+        }
+        return super.dispatchKeyEvent(event)
+    }
 
     private lateinit var repo: AnkiBackendRepo
 
@@ -370,6 +398,9 @@ fun AppScreen(
     // 保存のたびに増やす。これを合図に自動同期する
     var saveTick by remember { mutableIntStateOf(0) }
     var error by remember { mutableStateOf<String?>(null) }
+    // Ctrl+F が押された合図 (プレビュー側 / 編集側)
+    var previewFindRequest by remember { mutableIntStateOf(0) }
+    var editorFindRequest by remember { mutableIntStateOf(0) }
     var syncing by remember { mutableStateOf(false) }
     var syncMessage by remember { mutableStateOf<String?>(null) }
     // この端末で保存したが、まだ同期を通していない内容 (競合の判定に使う)
@@ -680,34 +711,46 @@ fun AppScreen(
     }
 
     fun saveEdits() {
+        // 保存ボタン・ショートカット・カード移動の自動保存が重なっても、
+        // 新規ノートを複数回 add しない。
+        if (saving) return
         val note = selected ?: return
+        val wasCreating = creating
+        val fieldsToSave = draft.fields.toList()
+        val tagsToSave = draft.tags
+        saving = true
         scope.launch {
-            saving = true
             try {
-                if (creating) {
+                if (wasCreating) {
                     val added = withContext(Dispatchers.IO) {
-                        repo.addNote(newNoteTypeId, newNoteDeckId, draft.fields, draft.tags)
+                        repo.addNote(newNoteTypeId, newNoteDeckId, fieldsToSave, tagsToSave)
                     }
                     creating = false
                     dirty = false
                     notes = listOf(added) + notes
-                    pendingEdits[added.id] = NoteContent(draft.fields, draft.tags)
+                    pendingEdits[added.id] = NoteContent(fieldsToSave, tagsToSave)
                     syncMessage = "ノートを追加しました"
                     select(added)
                     // 追加はその場で静かに同期する (進行状況は出さない)
                     syncInBackground()
                     return@launch
                 }
-                withContext(Dispatchers.IO) { repo.saveNote(note, draft.fields, draft.tags) }
+                withContext(Dispatchers.IO) { repo.saveNote(note, fieldsToSave, tagsToSave) }
                 dirty = false
-                pendingEdits[note.id] = NoteContent(draft.fields, draft.tags)
+                pendingEdits[note.id] = NoteContent(fieldsToSave, tagsToSave)
                 syncMessage = "保存しました"
                 saveTick++
                 // 一覧の表示内容も更新する
                 notes = notes.map {
-                    if (it.id == note.id) it.copy(fields = draft.fields, tags = draft.tags) else it
+                    if (it.id == note.id) it.copy(fields = fieldsToSave, tags = tagsToSave) else it
                 }
-                selected = notes.firstOrNull { it.id == note.id } ?: note
+                if (selected?.id == note.id) {
+                    val saved = notes.firstOrNull { it.id == note.id } ?: note
+                    selected = saved
+                    // 保存した内容でプレビューを描き直す
+                    // (手動更新のときは、ここで初めて画面に反映される)
+                    select(saved)
+                }
             } catch (e: Exception) {
                 android.util.Log.e("AnkiEditor", "save failed", e)
                 syncMessage = "保存失敗: ${e.message}"
@@ -1252,15 +1295,53 @@ fun AppScreen(
     // 設定の中身。幅の広い画面ではダイアログ、折りたたみ時は全画面で表示する
     // 設定は Notion のように「一覧 → 詳細」で辿る
 
-    // 同期の状況はレイアウトを押し下げないよう、重ねて出す小さなポップアップで通知する
-    val snackbarHostState = remember { SnackbarHostState() }
-    LaunchedEffect(syncMessage, syncing) {
+    // 編集ページの内容を、いますぐ受け取る (保存の直前に使う)
+    var flushEditor by remember { mutableStateOf({ }) }
+
+    // ---- ハードウェアキーボードのショートカット ----
+    // Ctrl+F 検索 (編集中はエディタ内) / Ctrl+S 保存
+    val activity = LocalContext.current as? MainActivity
+    DisposableEffect(activity, editing, dirty, saving) {
+        activity?.shortcutHandler = { event ->
+            when {
+                !event.isCtrlPressed -> false
+                event.keyCode == android.view.KeyEvent.KEYCODE_F -> {
+                    if (editing) editorFindRequest++ else previewFindRequest++
+                    true
+                }
+
+                event.keyCode == android.view.KeyEvent.KEYCODE_S -> {
+                    android.util.Log.d(
+                        "AnkiEditorKeys",
+                        "Ctrl+S 編集中=$editing 変更あり=$dirty 保存中=$saving",
+                    )
+                    // ページ側の入力はまとめて伝えているので、保存の前に確定させる
+                    if (editing && !saving) {
+                        flushEditor()
+                        scope.launch {
+                            delay(120)
+                            if (dirty) saveEdits()
+                        }
+                    }
+                    true
+                }
+
+                else -> false
+            }
+        }
+        onDispose { activity?.shortcutHandler = null }
+    }
+
+    // 同期などの知らせは、端末の標準の出し方 (下中央のトースト) に合わせる。
+    // 続けて出るときは前のものを消して、重ならないようにする
+    val toastContext = LocalContext.current
+    val toast = remember { arrayOfNulls<android.widget.Toast>(1) }
+    LaunchedEffect(syncMessage) {
         val m = syncMessage ?: return@LaunchedEffect
-        snackbarHostState.showSnackbar(
-            message = m,
-            duration = if (syncing) SnackbarDuration.Indefinite else SnackbarDuration.Short,
-            withDismissAction = !syncing,
-        )
+        toast[0]?.cancel()
+        toast[0] = android.widget.Toast
+            .makeText(toastContext, m, android.widget.Toast.LENGTH_SHORT)
+            .also { it.show() }
     }
 
     // 戻るジェスチャで 設定 → 編集 → プレビュー の順に 1 つずつ戻る
@@ -1500,16 +1581,7 @@ fun AppScreen(
     }
 
     Box(Modifier.fillMaxSize()) {
-    Scaffold(
-        snackbarHost = {
-            SnackbarHost(snackbarHostState) { data ->
-                Snackbar(
-                    snackbarData = data,
-                    modifier = Modifier.padding(8.dp),
-                )
-            }
-        },
-    ) { padding ->
+    Scaffold { padding ->
         if (twoPane) {
             BoxWithConstraints(Modifier.padding(padding).fillMaxSize()) {
                 val total = maxWidth
@@ -1566,6 +1638,7 @@ fun AppScreen(
                         onRefresh = if (editing && !livePreview) ({ refreshPreview() }) else null,
                         // 編集していないときはカード内検索を出す
                         findable = selected != null && !editing,
+                        findRequest = previewFindRequest,
                     )
                     if (editing) {
                         SplitHandle(
@@ -1605,6 +1678,8 @@ fun AppScreen(
                                     onClose = { stopEditing() },
                                     onRefreshPreview =
                                         if (livePreview) null else ({ refreshPreview() }),
+                                    findRequest = editorFindRequest,
+                                    onProvideFlush = { flushEditor = it },
                                     modifier = Modifier.weight(1f).fillMaxHeight(),
                                 )
                             }
@@ -1656,6 +1731,7 @@ fun AppScreen(
                             onEdit = ::startEditing,
                             onAdd = { showAddNote = true },
                             findable = selected != null,
+                            findRequest = previewFindRequest,
                         )
                         SmallFloatingActionButton(
                             onClick = { selected = null },
@@ -1691,6 +1767,8 @@ fun AppScreen(
                             onSave = { saveEdits() },
                             onClose = { stopEditing() },
                             onRefreshPreview = null,
+                            findRequest = editorFindRequest,
+                            onProvideFlush = { flushEditor = it },
                             modifier = Modifier.padding(padding).fillMaxSize(),
                         )
                     }
@@ -1889,21 +1967,6 @@ fun SplitHandle(onDrag: (Float) -> Unit) {
     }
 }
 
-/** 右端で内容がグラデーションで自然に消えるようにする (カラム境界に文字がかからないよう) */
-fun Modifier.fadingRightEdge(width: Dp = 24.dp): Modifier = this
-    .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-    .drawWithContent {
-        drawContent()
-        drawRect(
-            brush = Brush.horizontalGradient(
-                colors = listOf(Color.Black, Color.Transparent),
-                startX = size.width - width.toPx(),
-                endX = size.width,
-            ),
-            blendMode = BlendMode.DstIn,
-        )
-    }
-
 /** 長押しドラッグ、または ▲▼ ボタンで並び替えできるタグリスト。★ で常時表示を切り替える */
 @Composable
 fun TagReorderList(
@@ -2022,6 +2085,8 @@ fun PreviewPane(
     onAdd: (() -> Unit)? = null,
     onRefresh: (() -> Unit)? = null,
     findable: Boolean = false,
+    /** Ctrl+F が押された回数。増えたら検索バーを開く */
+    findRequest: Int = 0,
 ) {
     val dirState = rememberUpdatedState(mediaDir)
     // プレビュー内検索
@@ -2030,6 +2095,13 @@ fun PreviewPane(
     var findIndex by remember(note?.id) { mutableIntStateOf(0) }
     var findTotal by remember(note?.id) { mutableIntStateOf(0) }
     var webRef by remember { mutableStateOf<WebView?>(null) }
+    val findFieldFocus = remember { FocusRequester() }
+    LaunchedEffect(findRequest) {
+        if (findRequest > 0 && findable) {
+            findOpen = true
+            runCatching { findFieldFocus.requestFocus() }
+        }
+    }
     // カードと同じ背景色を敷いておく。WebView の初期描画前に黒が見えるのを防ぐ
     BoxWithConstraints(modifier.fillMaxHeight().background(CARD_BACKGROUND)) {
         // カードの CSS が @media (min-width: 481px) で切り替わるため、
@@ -2146,7 +2218,7 @@ fun PreviewPane(
                         textStyle = MaterialTheme.typography.labelLarge
                             .copy(color = MaterialTheme.colorScheme.onSurface),
                         cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                        modifier = Modifier.width(150.dp),
+                        modifier = Modifier.width(150.dp).focusRequester(findFieldFocus),
                         decorationBox = { inner ->
                             if (findQuery.isEmpty()) {
                                 Text(

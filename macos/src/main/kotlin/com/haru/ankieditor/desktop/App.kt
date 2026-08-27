@@ -1,5 +1,6 @@
 package com.haru.ankieditor.desktop
 
+
 import androidx.compose.animation.*
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -22,6 +23,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.rounded.ViewSidebar
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -29,6 +31,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.foundation.focusable
+import androidx.compose.ui.ExperimentalComposeUiApi
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.onPointerEvent
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -92,7 +97,7 @@ fun App(
     server: MediaServer,
     onMinimumWindowWidth: (Float) -> Unit = {},
     onMaximumWindowWidth: (Float?) -> Unit = {},
-    onResizeWindowBy: (Float) -> Unit = {},
+    onResizeWindowBy: suspend (Float) -> Unit = {},
 ) {
     val scope = rememberCoroutineScope()
 
@@ -125,6 +130,7 @@ fun App(
     var newNoteTypeId by remember { mutableStateOf(0L) }
     var newNoteDeckId by remember { mutableStateOf(0L) }
     var editorMode by remember { mutableStateOf(prefs.editorMode) }
+    var editorTransitioning by remember { mutableStateOf(false) }
     // 打鍵のたびに画面全体が作り直されないよう、下書きは専用の入れ物に持たせる
     val draft = remember { DraftState() }
     var dirty by remember { mutableStateOf(false) }
@@ -159,6 +165,8 @@ fun App(
     var previewWidth by remember {
         mutableStateOf(prefs.previewWidth.dp.coerceIn(previewMinWidth, previewMaxWidth))
     }
+    // 開閉中にウインドウ制約やComposeの再計測が入っても、表示幅はこの値に固定する。
+    var frozenPreviewWidth by remember { mutableStateOf<androidx.compose.ui.unit.Dp?>(null) }
 
     LaunchedEffect(editing, listVisible, listWidth, previewWidth, previewMinWidth) {
         // プレビューの共通最低幅 + 操作可能な編集欄 320dp を常に先取りする。
@@ -169,7 +177,8 @@ fun App(
         onMinimumWindowWidth(listPart + previewPart + editorPart)
     }
 
-    LaunchedEffect(editing, listVisible, listWidth, previewWidth) {
+    LaunchedEffect(editing, editorTransitioning, listVisible, listWidth, previewWidth) {
+        if (editorTransitioning) return@LaunchedEffect
         // 編集欄が無いときは、プレビュー最大幅より右へ空のウインドウを
         // 広げられないようにする。編集中は右側を編集欄として使うので解除する。
         if (editing) {
@@ -378,24 +387,36 @@ fun App(
     }
 
     fun startEditing() {
+        if (editorTransitioning || editing) return
         val note = selected ?: return
         loadDraft(note)
         editorMode = prefs.editorMode
-        editing = true
-        // 先に再構成してJCEFを「幅固定」状態へ移してから、外側だけを広げる。
+        frozenPreviewWidth = previewWidth.coerceIn(previewMinWidth, previewMaxWidth)
+        editorTransitioning = true
+        // 先に最大幅を解除して、プレビューには一切触れず右側に空間を作る。
+        onMaximumWindowWidth(null)
         scope.launch {
-            delay(20)
+            // 実際のウインドウ拡張が完了するまで待つ。固定時間で見切ると、
+            // 狭い親制約の中へエディタが先に現れてプレビューが圧縮される。
             onResizeWindowBy(editorWidth.value + 10f)
+            editing = true
+            delay(300)
+            editorTransitioning = false
         }
     }
 
     fun stopEditing() {
+        if (editorTransitioning || !editing) return
         val closingWidth = editorWidth.value + 10f
+        editorTransitioning = true
+        // 先にエディタだけを消す。プレビューとウインドウには触れない。
         editing = false
-        // JCEFはeditorShownが0になるまで固定されたまま。外側と編集欄だけを閉じる。
         scope.launch {
-            delay(20)
+            delay(300)
+            // エディタが完全に消えた後、空いた領域だけを縮め、完了を待つ。
             onResizeWindowBy(-closingWidth)
+            editorTransitioning = false
+            frozenPreviewWidth = null
         }
         dirty = false
         if (creating) {
@@ -577,7 +598,9 @@ fun App(
             val total = maxWidth
             val density = LocalDensity.current
 
-            Row(Modifier.fillMaxSize()) {
+            // 上端はmacOSのタイトルバー操作専用。JCEFをこの領域へ入れないことで、
+            // 信号機横の操作をCompose側の1系統だけに保つ。
+            Row(Modifier.fillMaxSize().padding(top = 36.dp)) {
                 // ---- 左: 検索と一覧 ----
                 // 保存した境界はウインドウの拡縮では動かさない。
                 // 幅を変えるのは、ユーザーが境界を直接ドラッグしたときだけ。
@@ -597,8 +620,6 @@ fun App(
                         .clipToBounds()
                 ) {
                 Column(Modifier.requiredWidth(actualListWidth).fillMaxHeight()) {
-                    // macOS のウインドウボタン (信号機) と重ならないよう上を空ける
-                    Spacer(Modifier.height(28.dp))
                     SearchControls(
                         keyword = keyword,
                         onKeyword = { keyword = it },
@@ -655,8 +676,9 @@ fun App(
                     prefs.listWidth = listWidth.value
                 }
 
-                // ---- 右: プレビュー (+ 編集) ----
-                // 編集を開くと、プレビューが左へ詰まりながら編集列が右から出てくる
+                // ---- 右: 編集 + プレビュー ----
+                // プレビューは常にウインドウ右端の固定列。編集欄は一覧との間に出す。
+                // これにより JCEF は開閉時に幅を変えず、横位置だけが移動する。
                 val editorShown by animateFloatAsState(
                     targetValue = if (editing) 1f else 0f,
                     animationSpec = tween(260),
@@ -664,54 +686,22 @@ fun App(
                 )
                 val rightAvailable = (total - shownListWidth - if (listVisible) 10.dp else 0.dp)
                     .coerceAtLeast(previewMinWidth)
-                val boundedPreviewWidth = previewWidth.coerceIn(previewMinWidth, previewMaxWidth)
-                Row(Modifier.weight(1f).fillMaxHeight()) {
-                    Box(Modifier.width(boundedPreviewWidth).fillMaxHeight()) {
-                        PreviewPane(
-                            note = selected,
-                            server = server,
-                            html = previewHtml.takeIf { previewNoteId == selected?.id },
-                            loading = previewLoading,
-                            zoom = prefs.textZoom / 100.0,
-                            onEdit = if (selected != null && !editing) ({ startEditing() }) else null,
-                            onAdd = if (editing) null else ({ showAddNote = true }),
-                            onRefresh = if (editing && !livePreview) ({ refreshPreview() }) else null,
-                            // 編集中でもカード内検索は使えるようにしておく
-                            findable = selected != null,
-                            findRequest = previewFindRequest,
-                            onShowList = if (listVisible) null else ({
-                                listVisible = true
-                                prefs.listVisible = true
-                            }),
-                            onUndo = if (editing) ({ sendHistoryShortcut(false) }) else null,
-                            onRedo = if (editing) ({ sendHistoryShortcut(true) }) else null,
-                            // 設定や確認を前に出している間は、ページを引っ込める
-                            covered = showSettings || showLogin || showAddNote ||
-                                deleteTarget != null || fullSyncPrompt != null ||
-                                conflicts.isNotEmpty(),
-                            statusMessage = message,
-                            syncing = syncing,
-                            // editing は閉じる開始時に false になる。見た目上の編集欄が
-                            // 完全に消えるまではJCEFの幅固定を解除しない。
-                            lockWidthDuringWindowResize = editing || editorShown > 0.001f,
-                            modifier = Modifier.fillMaxSize(),
-                        )
-                    }
-                    // いまのウインドウ幅で編集列に使える上限。
-                    // プレビューの共通最低幅を先に確保する。
-                    val editorRoom = (rightAvailable - boundedPreviewWidth - 10.dp)
-                        .coerceAtLeast(EDITOR_MIN_WIDTH_DP.dp)
-                    val effectiveEditorWidth = if (editing) editorRoom else editorWidth
-                    if (editing) SideEffect {
-                        editorWidth = effectiveEditorWidth
-                        prefs.editorWidth = effectiveEditorWidth.value
-                    }
+                val boundedPreviewWidth = (frozenPreviewWidth ?: previewWidth)
+                    .coerceIn(previewMinWidth, previewMaxWidth)
+                // いまのウインドウ幅で編集列に使える上限。
+                // 固定するプレビュー幅を先に確保する。
+                val editorRoom = (rightAvailable - boundedPreviewWidth - 10.dp)
+                    .coerceAtLeast(EDITOR_MIN_WIDTH_DP.dp)
+                val effectiveEditorWidth = if (editing) editorRoom else editorWidth
+                if (editing) SideEffect {
+                    editorWidth = effectiveEditorWidth
+                    prefs.editorWidth = effectiveEditorWidth.value
+                }
+                Row(
+                    Modifier.weight(1f).fillMaxHeight(),
+                    horizontalArrangement = Arrangement.End,
+                ) {
                     if (editorShown > 0.001f) {
-                        SplitHandle { delta ->
-                            val moved = previewWidth + with(density) { delta.toDp() }
-                            previewWidth = moved.coerceIn(previewMinWidth, previewMaxWidth)
-                            prefs.previewWidth = previewWidth.value
-                        }
                         Box(
                             Modifier
                                 .width(effectiveEditorWidth * editorShown)
@@ -734,28 +724,52 @@ fun App(
                                 modifier = Modifier.requiredWidth(effectiveEditorWidth).fillMaxHeight(),
                             )
                         }
+                        SplitHandle { delta ->
+                            // プレビューが右側なので、境界を左へ動かすほど幅が増える。
+                            val moved = previewWidth - with(density) { delta.toDp() }
+                            previewWidth = moved.coerceIn(previewMinWidth, previewMaxWidth)
+                            frozenPreviewWidth = previewWidth
+                            prefs.previewWidth = previewWidth.value
+                        }
+                    }
+                    Box(Modifier.width(boundedPreviewWidth).fillMaxHeight()) {
+                        PreviewPane(
+                            note = selected,
+                            server = server,
+                            html = previewHtml.takeIf { previewNoteId == selected?.id },
+                            loading = previewLoading,
+                            zoom = prefs.textZoom / 100.0,
+                            onEdit = if (selected != null && !editing) ({ startEditing() }) else null,
+                            onAdd = if (editing) null else ({ showAddNote = true }),
+                            onRefresh = if (editing && !livePreview) ({ refreshPreview() }) else null,
+                            findable = selected != null,
+                            findRequest = previewFindRequest,
+                            covered = showSettings || showLogin || showAddNote ||
+                                deleteTarget != null || fullSyncPrompt != null ||
+                                conflicts.isNotEmpty(),
+                            statusMessage = message,
+                            syncing = syncing,
+                            lockWidthDuringWindowResize =
+                                editorTransitioning || editing || editorShown > 0.001f,
+                            modifier = Modifier.fillMaxSize(),
+                        )
                     }
                 }
             }
         }
     }
 
-        // 信号機の直後に固定するタイトルバー操作。プレビューが全面表示のときは
-        // 同じ部品をカードHTML側へ出す（ネイティブJCEFが前面になるため）。
-        if (listVisible) {
-            TitlebarControls(
-                listVisible = true,
-                editing = editing,
-                onToggleList = {
-                    listVisible = false
-                    prefs.listVisible = false
-                },
-                onUndo = { sendHistoryShortcut(false) },
-                onRedo = { sendHistoryShortcut(true) },
-                modifier = Modifier.align(Alignment.TopStart).padding(start = 82.dp, top = 3.dp)
-                    .zIndex(20f),
-            )
-        }
+        // 信号機横に常駐する唯一のタイトルバー操作。
+        TitlebarControls(
+            listVisible = listVisible,
+            onToggleList = {
+                listVisible = !listVisible
+                prefs.listVisible = listVisible
+            },
+            // 信号機の右に、同じ高さで並べる
+            modifier = Modifier.align(Alignment.TopStart).padding(start = 78.dp, top = 8.dp)
+                .zIndex(20f),
+        )
 
     }
 
@@ -854,29 +868,32 @@ fun App(
     )
 }
 
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 private fun TitlebarControls(
     listVisible: Boolean,
-    editing: Boolean,
     onToggleList: () -> Unit,
-    onUndo: () -> Unit,
-    onRedo: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Row(modifier, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-        IconButton(onClick = onToggleList, modifier = Modifier.size(30.dp)) {
+    // Claude のデスクトップ版と同じで、タイトルバーに置くのは一覧の開閉だけ。
+    // 元に戻す・やり直すはキー操作 (⌘Z / ⌘⇧Z) に任せる
+    var hovered by remember { mutableStateOf(false) }
+    Surface(
+        onClick = onToggleList,
+        shape = RoundedCornerShape(6.dp),
+        color = if (hovered) MaterialTheme.colorScheme.surfaceContainerHigh else Color.Transparent,
+        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = modifier
+            .size(28.dp)
+            .onPointerEvent(PointerEventType.Enter) { hovered = true }
+            .onPointerEvent(PointerEventType.Exit) { hovered = false },
+    ) {
+        Box(contentAlignment = Alignment.Center) {
             Icon(
-                Icons.Default.ViewSidebar,
+                Icons.Rounded.ViewSidebar,
                 if (listVisible) "一覧を閉じる" else "一覧を開く",
-                Modifier.size(19.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                Modifier.size(18.dp),
             )
-        }
-        IconButton(onClick = onUndo, enabled = editing, modifier = Modifier.size(30.dp)) {
-            Icon(Icons.Default.Undo, "元に戻す", Modifier.size(19.dp))
-        }
-        IconButton(onClick = onRedo, enabled = editing, modifier = Modifier.size(30.dp)) {
-            Icon(Icons.Default.Redo, "やり直す", Modifier.size(19.dp))
         }
     }
 }

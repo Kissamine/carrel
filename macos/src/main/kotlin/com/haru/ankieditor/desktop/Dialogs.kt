@@ -1,5 +1,6 @@
 package com.haru.ankieditor.desktop
 
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -7,6 +8,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.rounded.ArrowDropDown
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -135,7 +137,7 @@ fun Dialogs(
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                             )
-                            Icon(Icons.Default.ArrowDropDown, null)
+                            Icon(Icons.Rounded.ArrowDropDown, null)
                         }
                         DropdownMenu(expanded = openType, onDismissRequest = { openType = false }) {
                             types.forEach { (id, name) ->
@@ -152,7 +154,7 @@ fun Dialogs(
                     Box {
                         OutlinedButton(onClick = { openDeck = true }, shape = CircleShape) {
                             Text(deckName ?: "既定のデッキ", maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            Icon(Icons.Default.ArrowDropDown, null)
+                            Icon(Icons.Rounded.ArrowDropDown, null)
                         }
                         DropdownMenu(expanded = openDeck, onDismissRequest = { openDeck = false }) {
                             DropdownMenuItem(

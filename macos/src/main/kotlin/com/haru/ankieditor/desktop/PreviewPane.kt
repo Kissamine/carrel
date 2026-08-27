@@ -1,5 +1,6 @@
 package com.haru.ankieditor.desktop
 
+
 import androidx.compose.animation.*
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloat
@@ -19,6 +20,10 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -52,10 +57,6 @@ fun PreviewPane(
     statusMessage: String? = null,
     syncing: Boolean = false,
     lockWidthDuringWindowResize: Boolean = false,
-    /** 一覧をしまっているときに戻すための操作 */
-    onShowList: (() -> Unit)? = null,
-    onUndo: (() -> Unit)? = null,
-    onRedo: (() -> Unit)? = null,
     /** ⌘F が押された回数。増えたら検索バーを開く */
     findRequest: Int = 0,
 ) {
@@ -79,25 +80,18 @@ fun PreviewPane(
                     canAdd = true,
                     canFind = true,
                     canRefresh = true,
-                    canShowList = true,
-                    canUndo = true,
-                    canRedo = true,
                 ) + "</body>",
             )
         }
     }
     val controlsScript = remember(
         onEdit != null, onAdd != null, findable, onRefresh != null,
-        onShowList != null, onUndo != null, onRedo != null,
     ) {
         mapOf(
             "ankiEdit" to (onEdit != null),
             "ankiAdd" to (onAdd != null),
             "ankiFindOpen" to findable,
             "ankiRefresh" to (onRefresh != null),
-            "ankiShowList" to (onShowList != null),
-            "ankiUndo" to (onUndo != null),
-            "ankiRedo" to (onRedo != null),
         ).entries.joinToString(";") { (id, shown) ->
             "(function(e){if(e)e.style.display='${if (shown) "flex" else "none"}'})(document.getElementById('$id'))"
         }
@@ -142,9 +136,6 @@ fun PreviewPane(
                     "ui:add" -> onAdd?.invoke()
                     "ui:edit" -> onEdit?.invoke()
                     "ui:refresh" -> onRefresh?.invoke()
-                    "ui:showlist" -> onShowList?.invoke()
-                    "ui:undo" -> onUndo?.invoke()
-                    "ui:redo" -> onRedo?.invoke()
                 }
             },
         )
@@ -175,27 +166,6 @@ fun PreviewPane(
             }
         }
 
-        // カードが出ていないときは、ページ側のボタンが無いのでこちらに出す
-        if (onShowList != null && (!hasCard || covered)) {
-            Surface(
-                onClick = onShowList,
-                shape = RoundedCornerShape(8.dp),
-                color = MaterialTheme.colorScheme.secondaryContainer,
-                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                // ウインドウボタン (信号機) の右に並べる
-                modifier = Modifier.align(Alignment.TopStart).padding(start = 86.dp, top = 12.dp)
-                    .size(30.dp),
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                        "一覧を表示",
-                        Modifier.size(18.dp),
-                    )
-                }
-            }
-        }
-
         LaunchedEffect(findRequest) {
             if (findRequest > 0) handle.run("window.__ankiFindOpen && window.__ankiFindOpen()")
         }
@@ -203,7 +173,6 @@ fun PreviewPane(
         // ボタンだけを表示・非表示にする。本文やviewportには触れない。
         LaunchedEffect(
             onEdit != null, onAdd != null, findable, onRefresh != null,
-            onShowList != null, onUndo != null, onRedo != null,
         ) {
             handle.run(controlsScript)
         }
@@ -238,7 +207,7 @@ private fun PreviewStatus(message: String?, syncing: Boolean, modifier: Modifier
             ) {
                 if (syncing) {
                     Icon(
-                        Icons.Default.Refresh,
+                        Icons.Rounded.Refresh,
                         null,
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(16.dp).graphicsLayer { rotationZ = rotation },
@@ -262,16 +231,16 @@ private fun PreviewButtons(
     onToggleFind: () -> Unit,
 ) {
     if (onRefresh != null) {
-        FloatingButton(Icons.Default.Refresh, "プレビューを更新", small = small, onClick = onRefresh)
+        FloatingButton(Icons.Rounded.Refresh, "プレビューを更新", small = small, onClick = onRefresh)
     }
     if (onAdd != null) {
-        FloatingButton(Icons.Default.Add, "新しいノート", accent = true, small = small, onClick = onAdd)
+        FloatingButton(Icons.Rounded.Add, "新しいノート", accent = true, small = small, onClick = onAdd)
     }
     if (findable) {
-        FloatingButton(Icons.Default.Search, "このカードを検索", small = small, onClick = onToggleFind)
+        FloatingButton(Icons.Rounded.Search, "このカードを検索", small = small, onClick = onToggleFind)
     }
     if (onEdit != null) {
-        FloatingButton(Icons.Default.Edit, "編集", small = small, onClick = onEdit)
+        FloatingButton(Icons.Rounded.Edit, "編集", small = small, onClick = onEdit)
     }
 }
 

@@ -1,5 +1,6 @@
 package com.haru.ankieditor.desktop
 
+
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -15,6 +16,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Image
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -37,6 +45,8 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import java.awt.Toolkit
+import java.awt.datatransfer.DataFlavor
 import com.haru.ankieditor.AnkiNote
 import com.haru.ankieditor.EditorMode
 import com.haru.ankieditor.EditorShortcuts
@@ -158,16 +168,16 @@ fun EditorPane(
                         onClick = onSave,
                         enabled = dirty && !saving,
                         modifier = Modifier.size(34.dp),
-                    ) { Icon(Icons.Default.Check, "保存", Modifier.size(17.dp)) }
+                    ) { Icon(Icons.Rounded.Check, "保存", Modifier.size(17.dp)) }
                 } else {
                     TextButton(onClick = onSave, enabled = dirty && !saving) {
-                        Icon(Icons.Default.Check, null, Modifier.size(16.dp))
+                        Icon(Icons.Rounded.Check, null, Modifier.size(16.dp))
                         Spacer(Modifier.width(4.dp))
                         Text("保存")
                     }
                 }
                 IconButton(onClick = onClose, modifier = Modifier.size(34.dp)) {
-                    Icon(Icons.Default.Close, "編集を終了", Modifier.size(18.dp))
+                    Icon(Icons.Rounded.Close, "編集を終了", Modifier.size(18.dp))
                 }
             }
         }
@@ -221,7 +231,7 @@ fun EditorPane(
                 if (onInsertImage != null) {
                     MediaAddButton(
                         "画像を追加",
-                        Icons.Default.Image,
+                        Icons.Rounded.Image,
                         compact,
                         MaterialTheme.colorScheme.primaryContainer,
                         MaterialTheme.colorScheme.onPrimaryContainer,
@@ -263,7 +273,7 @@ fun EditorPane(
                 draft.tags = it
                 onDirty()
             },
-            modifier = Modifier.fillMaxWidth().padding(12.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
         )
     }
 }
@@ -558,9 +568,12 @@ private fun NoteFindBar(
     onClear: () -> Unit,
 ) {
     val interaction = remember { MutableInteractionSource() }
+    // Enter で確定したか (確定後は矢印で一致箇所を移動する)
+    var confirmed by remember { mutableStateOf(false) }
+    LaunchedEffect(query) { if (query.isBlank()) confirmed = false }
     Row(modifier, verticalAlignment = Alignment.CenterVertically) {
         Icon(
-            Icons.Default.Search,
+            Icons.Rounded.Search,
             "ノート内検索",
             Modifier.size(18.dp),
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -568,13 +581,32 @@ private fun NoteFindBar(
         Spacer(Modifier.width(6.dp))
         BasicTextField(
             value = query,
-            onValueChange = onQueryChange,
+            onValueChange = { confirmed = false; onQueryChange(it) },
             enabled = enabled,
             modifier = Modifier
                 .weight(1f)
                 .widthIn(min = 120.dp)
                 .height(TOOLBAR_ITEM_HEIGHT)
-                .focusRequester(focusRequester),
+                .focusRequester(focusRequester)
+                .onPreviewKeyEvent { event ->
+                    // JCEF のプレビューでコピーした文字列も、Compose 側の検索欄へ
+                    // 確実に渡す。ネイティブ部品をまたぐと標準の ⌘V が届かない
+                    // macOS/JCEF の組み合わせがあるため、OS クリップボードを直接読む。
+                    if (event.type == KeyEventType.KeyDown &&
+                        event.isMetaPressed && event.key == Key.V
+                    ) {
+                        val pasted = runCatching {
+                            Toolkit.getDefaultToolkit().systemClipboard
+                                .getData(DataFlavor.stringFlavor)?.toString()
+                        }.getOrNull()
+                        if (!pasted.isNullOrEmpty()) {
+                            onQueryChange(query + pasted.replace(Regex("[\\r\\n]+"), " "))
+                        }
+                        true
+                    } else {
+                        false
+                    }
+                },
             textStyle = MaterialTheme.typography.labelMedium
                 .copy(color = MaterialTheme.colorScheme.onSurface),
             singleLine = true,
@@ -600,7 +632,7 @@ private fun NoteFindBar(
                     trailingIcon = if (query.isEmpty()) null else {
                         {
                             IconButton(onClick = onClear, modifier = Modifier.size(24.dp)) {
-                                Icon(Icons.Default.Close, "検索語を消す", Modifier.size(14.dp))
+                                Icon(Icons.Rounded.Close, "検索語を消す", Modifier.size(14.dp))
                             }
                         }
                     },
@@ -628,10 +660,10 @@ private fun NoteFindBar(
                     modifier = Modifier.padding(horizontal = 4.dp),
                 )
                 IconButton(onClick = { onMove(false) }, enabled = total > 0, modifier = Modifier.size(30.dp)) {
-                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, "前へ")
+                    Icon(Icons.AutoMirrored.Rounded.KeyboardArrowLeft, "前へ")
                 }
                 IconButton(onClick = { onMove(true) }, enabled = total > 0, modifier = Modifier.size(30.dp)) {
-                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, "次へ")
+                    Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, "次へ")
                 }
             }
         }
@@ -666,7 +698,7 @@ private fun MediaAddButton(
             ) {
                 Icon(icon, if (compact) label else null, Modifier.size(16.dp))
                 if (compact) {
-                    Icon(Icons.Default.Add, null, Modifier.size(12.dp))
+                    Icon(Icons.Rounded.Add, null, Modifier.size(12.dp))
                 } else {
                     Spacer(Modifier.width(6.dp))
                     Text(label, style = MaterialTheme.typography.labelMedium, maxLines = 1)
