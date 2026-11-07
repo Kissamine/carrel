@@ -6,8 +6,6 @@ import { DEFAULT_KEYS, KEY_LABELS, currentKeys, keyOf, refreshTitlebarTips } fro
 
 // keywords は設定内検索のための手がかり
 const SECTIONS = [
-  { id: 'anki', title: 'Anki',
-    keywords: 'Anki プロフィール コレクション 同期 AnkiWeb 場所 本体' },
   { id: 'search', title: '検索',
     keywords: 'デッキ 並び順 ソート 読み込み 件数 起動時 関連順 名前順 更新順' },
   { id: 'tags', title: 'よく使うタグ',
@@ -26,6 +24,8 @@ const SECTIONS = [
     keywords: '削除 ごみ箱 復元 戻す アーカイブ' },
   { id: 'backup', title: 'バックアップ',
     keywords: 'バックアップ 控え 保存先 自動 間隔 手動 iCloud Dropbox 置き換え' },
+  { id: 'anki', title: 'Anki 連携',
+    keywords: 'Anki プロフィール コレクション 同期 iCloud iPhone 場所 本体 書き出し 取り込み' },
   { id: 'media', title: 'メディア整理',
     keywords: 'メディア 画像 音声 動画 未使用 削除 整理' },
   { id: 'appearance', title: '表示',
@@ -177,8 +177,31 @@ async function ankiPane(detail, ctx) {
   };
   const mhint = document.createElement('div');
   mhint.className = 'hint'; mhint.style.marginTop = '8px';
-  mhint.textContent = 'iPhone 版 Carrel の設定で、このフォルダを一度選んでください。以後はアプリを開くたびに変更分を自動で取り込みます';
+  mhint.textContent = 'iPhone 版 Carrel の設定「外部ファイルの同期」で、このフォルダを一度選んでください。以後は iPhone で作った・直した・学習した内容が、Carrel の起動時と保存時に Anki のコレクションへ取り込まれます (両方で直したカードはどちらを残すか選べます)';
   mbox.append(toggle, mwhere, now, mhint);
+
+  // 手動同期: どちらを正とするか選んで読み込む
+  const sbox = row(detail, '手動で同期する');
+  const pull = document.createElement('button');
+  pull.className = 'pill'; pull.textContent = 'iCloud (iPhone) から読み込む';
+  pull.onclick = async () => {
+    pull.disabled = true;
+    try { await ctx.syncFromMirror({ silentIfNone: false }); } finally { pull.disabled = false; }
+  };
+  const push = document.createElement('button');
+  push.className = 'pill ghost'; push.textContent = 'Anki のコレクションから読み込む'; push.style.marginLeft = '8px';
+  push.onclick = async () => {
+    push.disabled = true; push.textContent = '書き出しています…';
+    try {
+      const r = await window.anki.mirrorNow(true);
+      ctx.toast(r ? 'Anki の内容で iCloud をそろえました (メディア ' + r.copied + ' 件を更新)' : '書き出せませんでした');
+    } catch (e) { ctx.toast('失敗: ' + e.message); }
+    push.disabled = false; push.textContent = 'Anki のコレクションから読み込む';
+  };
+  const shint = document.createElement('div');
+  shint.className = 'hint'; shint.style.marginTop = '8px';
+  shint.textContent = '「iCloud から読み込む」は iPhone 側の変更を Anki のコレクションへ取り込みます (食い違うカードは選べます)。「Anki のコレクションから読み込む」は Anki 側の内容で iCloud を上書きします';
+  sbox.append(pull, push, shint);
 }
 
 async function accountPaneLegacy(detail, ctx) {

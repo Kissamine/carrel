@@ -486,6 +486,24 @@ app.whenReady().then(async () => {
     return mirroring;
   }
   ipcMain.handle('mirror:now', (_e, force) => mirrorNow(!!force));
+  // iPhone 側 (iCloud) との違いを調べる / 取り込む。取り込んだあとは Anki 側の内容で iCloud をそろえる
+  ipcMain.handle('mirror:diff', async () => {
+    const dest = mirrorDir();
+    if (!dest || !mirrorEnabled() || !fs.existsSync(path.join(dest, 'collection.anki2'))) return null;
+    await ensureBridge();
+    if (!collectionOpen) await openCollection();
+    return bridge.call('diffMirror', { dest });
+  });
+  ipcMain.handle('mirror:pull', async (_e, choices, theirsAll) => {
+    const dest = mirrorDir();
+    if (!dest) return null;
+    await ensureBridge();
+    if (!collectionOpen) await openCollection();
+    const r = await bridge.call('pullMirror', { dest, choices: choices || {}, theirsAll: !!theirsAll });
+    mark('iCloud から取り込み: 追加 ' + r.added + ' / 更新 ' + r.updated + ' / 削除 ' + r.deleted + ' / カード ' + r.cards);
+    await mirrorNow(true);
+    return r;
+  });
   ipcMain.handle('mirror:status', () => {
     const s = readSettings();
     return { enabled: mirrorEnabled(), dir: mirrorDir(), at: s.icloudMirroredAt || null };

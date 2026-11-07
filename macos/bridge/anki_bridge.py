@@ -90,6 +90,141 @@ class Bridge:
                     pass
         return {"copied": copied, "removed": removed, "total": len(seen)}
 
+    # ---------------------------------------------- iCloud (iPhone) からの取り込み
+
+    @staticmethod
+    def _mirror_db(dest: str) -> sqlite3.Connection:
+        path = os.path.join(dest, "collection.anki2")
+        if not os.path.exists(path):
+            raise RuntimeError("同期フォルダに collection.anki2 がありません")
+        return sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+
+    def diffMirror(self, dest: str) -> dict:
+        """Anki のコレクションと iCloud 側 (iPhone が書いたもの) の違いを調べる。
+
+        conflicts: 両方にあって本文かタグが違い、iPhone 側の方が新しいノート (どちらを残すか選んでもらう)
+        auto:      そのまま取り込める変更の数 (iPhone で作ったノート、消したノート、学習の記録・デッキ移動)"""
+        col = self._col()
+        m = self._mirror_db(dest)
+        try:
+            theirs = {r[0]: r for r in m.execute("select id, mod, flds, tags, mid from notes")}
+            their_cards = {r[0]: r for r in m.execute("select id, nid, mod from cards")}
+            their_graves = {r[0] for r in m.execute("select oid from graves where type = 1")}
+            their_revlog = {r[0] for r in m.execute("select id from revlog")}
+        finally:
+            m.close()
+        mine = {r[0]: r for r in col.db.all("select id, mod, flds, tags, mid from notes")}
+        my_revlog = {r[0] for r in col.db.all("select id from revlog")}
+        my_cards = {r[0]: r for r in col.db.all("select id, nid, mod from cards")}
+
+        conflicts = []
+        mac_newer = 0
+        for nid, t in theirs.items():
+            me = mine.get(nid)
+            if me is None:
+                continue
+            if me[2] == t[2] and me[3].strip() == t[3].strip():
+                continue
+            if t[1] > me[1]:
+                nt = col.models.get(me[4])
+                names = [f["name"] for f in nt["flds"]] if nt else []
+                conflicts.append({
+                    "id": nid,
+                    "mine": {"fields": me[2].split("\x1f"), "tags": me[3].strip(), "fieldNames": names,
+                             "title": me[2].split("\x1f")[0][:80], "savedAt": me[1]},
+                    "theirs": {"fields": t[2].split("\x1f"), "tags": t[3].strip(), "mtimeSecs": t[1]},
+                })
+            else:
+                mac_newer += 1
+        new_notes = [nid for nid in theirs if nid not in mine]
+        deleted = [nid for nid in mine if nid not in theirs and nid in their_graves]
+        card_updates = [cid for cid, c in their_cards.items() if cid in my_cards and c[2] > my_cards[cid][2]]
+        new_revlog = len(their_revlog - my_revlog)
+        return {
+            "conflicts": conflicts,
+            "auto": {"newNotes": len(new_notes), "deleted": len(deleted), "cards": len(card_updates), "revlog": new_revlog},
+            "macNewer": mac_newer,
+        }
+
+    def pullMirror(self, dest: str, choices: dict | None = None, theirsAll: bool = False) -> dict:
+        """iCloud 側の変更を Anki のコレクションへ取り込む。
+
+        choices: {noteId: "theirs" | "mine"} 競合ノートの選択。theirsAll なら全部 iPhone 側を採る。
+        選ばれなかった (mine) ノートは何もしない (あとで mirror() が Anki 側の内容で iCloud を上書きする)。"""
+        col = self._col()
+        choices = choices or {}
+        m = self._mirror_db(dest)
+        try:
+            theirs = {r[0]: r for r in m.execute(
+                "select id, guid, mid, mod, usn, tags, flds, sfld, csum, flags, data from notes")}
+            their_cards = {r[0]: r for r in m.execute(
+                "select id, nid, did, ord, mod, usn, type, queue, due, ivl, factor, reps, lapses, left, odue, odid, flags, data from cards")}
+            their_graves = {r[0] for r in m.execute("select oid from graves where type = 1")}
+            their_revlog = list(m.execute("select id, cid, usn, ease, ivl, lastIvl, factor, time, type from revlog"))
+        finally:
+            m.close()
+        mine = {r[0]: r for r in col.db.all("select id, mod, flds, tags from notes")}
+        my_cards = {r[0]: r[1] for r in col.db.all("select id, mod from cards")}
+        my_revlog = {r[0] for r in col.db.all("select id from revlog")}
+        known_models = {m["id"] for m in col.models.all()}
+        known_decks = {d["id"] for d in col.decks.all()}
+
+        added = updated = deleted = cards = revlog = 0
+        # 1) iPhone で作ったノート (そのまま行を入れる。id・guid を保つ)
+        for nid, t in theirs.items():
+            if nid in mine or t[2] not in known_models:
+                continue
+            col.db.execute(
+                "insert into notes (id, guid, mid, mod, usn, tags, flds, sfld, csum, flags, data) values (?,?,?,?,?,?,?,?,?,?,?)",
+                nid, t[1], t[2], t[3], -1, t[5], t[6], t[7], t[8], t[9], t[10])
+            for c in their_cards.values():
+                if c[1] != nid:
+                    continue
+                did = c[2] if c[2] in known_decks else 1
+                col.db.execute(
+                    "insert into cards (id, nid, did, ord, mod, usn, type, queue, due, ivl, factor, reps, lapses, left, odue, odid, flags, data) values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    c[0], c[1], did, c[3], c[4], -1, c[6], c[7], c[8], c[9], c[10], c[11], c[12], c[13], c[14], c[15], c[16], c[17])
+                my_cards[c[0]] = c[4]
+            added += 1
+        # 2) 本文・タグの違い: 選ばれたもの (または iPhone 側が新しいもの) を採る
+        for nid, t in theirs.items():
+            me = mine.get(nid)
+            if me is None:
+                continue
+            if me[2] == t[6] and me[3].strip() == t[5].strip():
+                continue
+            pick = choices.get(str(nid)) or choices.get(nid)
+            if pick is None:
+                pick = "theirs" if (theirsAll or t[3] > me[1]) else "mine"
+            if pick != "theirs":
+                continue
+            note = col.get_note(nid)
+            note.fields = t[6].split("\x1f")
+            note.tags = col.tags.split(t[5])
+            col.update_note(note)
+            updated += 1
+        # 3) iPhone で消したノート
+        gone = [nid for nid in mine if nid not in theirs and nid in their_graves]
+        if gone:
+            col.remove_notes(gone)
+            deleted = len(gone)
+        # 4) 学習の記録・デッキ移動 (iPhone 側の方が新しいカード)
+        for cid, c in their_cards.items():
+            if cid not in my_cards or c[4] <= my_cards[cid]:
+                continue
+            did = c[2] if c[2] in known_decks else None
+            col.db.execute(
+                "update cards set did = coalesce(?, did), mod = ?, usn = -1, type = ?, queue = ?, due = ?, ivl = ?, factor = ?, reps = ?, lapses = ?, left = ?, flags = ? where id = ?",
+                did, c[4], c[6], c[7], c[8], c[9], c[10], c[11], c[12], c[13], c[16], cid)
+            cards += 1
+        for r in their_revlog:
+            if r[0] in my_revlog or r[1] not in my_cards:
+                continue
+            col.db.execute("insert into revlog (id, cid, usn, ease, ivl, lastIvl, factor, time, type) values (?,?,?,?,?,?,?,?,?)",
+                           r[0], r[1], -1, r[3], r[4], r[5], r[6], r[7], r[8])
+            revlog += 1
+        return {"added": added, "updated": updated, "deleted": deleted, "cards": cards, "revlog": revlog}
+
     def _col(self) -> Collection:
         if self.col is None:
             raise RuntimeError("コレクションが開かれていません")

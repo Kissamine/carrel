@@ -15,6 +15,12 @@ struct ContentView: View {
         }
         .navigationSplitViewStyle(.balanced)
         .sheet(isPresented: $showSettings) { SettingsView().environmentObject(store) }
+        .sheet(item: $store.editing) { target in NoteEditorView(note: target.note).environmentObject(store) }
+        .fullScreenCover(isPresented: $store.studying) { StudyView(deck: store.selectedDeck).environmentObject(store) }
+        .sheet(isPresented: $store.showGuide) { GuideView() }
+        // 起動直後、同期フォルダの確認中はアイコンの起動画面
+        .overlay { if store.checking && store.notes.isEmpty { LaunchSplash().transition(.opacity) } }
+        .animation(.easeOut(duration: 0.25), value: store.checking)
         // 画像の拡大表示は画面全体に対して出す (詳細列から出すと、畳んだ Duo でサイドバーの分だけ横にずれる)
         .fullScreenCover(item: $store.lightbox) { item in LightboxView(url: item.url) }
     }
@@ -31,6 +37,7 @@ struct DetailView: View {
     @StateObject private var preview = PreviewController()
     @State private var showFind = false
     @State private var showInfo = false
+    @State private var confirmDelete = false
     @FocusState private var findFocused: Bool
 
     var body: some View {
@@ -76,6 +83,8 @@ struct DetailView: View {
                         Divider()
                         Button { showInfo = true } label: { Label("カード情報", systemImage: "info.circle") }
                         ShareLink(item: store.shareText(for: note)) { Label("共有", systemImage: "square.and.arrow.up") }
+                        Divider()
+                        Button(role: .destructive) { confirmDelete = true } label: { Label("カードを削除", systemImage: "trash") }
                     } label: { Image(systemName: "ellipsis.circle") }
                 }
                 ToolbarItemGroup(placement: .bottomBar) {
@@ -90,7 +99,8 @@ struct DetailView: View {
                         Text("\(i + 1) / \(store.filtered.count)").font(.footnote).monospacedDigit().foregroundStyle(.secondary).fixedSize().padding(.horizontal, 8)
                     }
                     Spacer()
-                    Button { store.pickRandom() } label: { Image(systemName: "shuffle") }
+                    // 編集 (ランダム表示は一覧側のメニューから)
+                    Button { store.editing = EditTarget(note: note) } label: { Image(systemName: "pencil") }
                     Button {
                         showFind.toggle()
                         if showFind { findFocused = true } else { store.findText = "" }
@@ -99,6 +109,9 @@ struct DetailView: View {
                 }
             }
             .sheet(isPresented: $showInfo) { CardInfoView(note: note).environmentObject(store) }
+            .confirmationDialog("このカードを削除しますか？", isPresented: $confirmDelete, titleVisibility: .visible) {
+                Button("削除", role: .destructive) { store.deleteNote(note) }
+            } message: { Text("ノートとそのカードが消えます。同期フォルダにも反映されます") }
         } else if !store.hasCollection {
             ContentUnavailableView {
                 Label("コレクションがありません", systemImage: "tray.and.arrow.down")
@@ -421,12 +434,16 @@ struct NoteListView: View {
                 Label("忘れやすい順", systemImage: "exclamationmark.triangle").tag("lapses")
             }
             Divider()
+            Button { store.editing = EditTarget(note: nil) } label: { Label("新しいカード", systemImage: "plus") }
+            Button { store.studying = true } label: { Label("学習を始める", systemImage: "graduationcap") }
+            Divider()
             Button { store.pickRandom() } label: { Label("ランダムに開く", systemImage: "shuffle") }
             if store.hasActiveFilter {
                 Button { store.clearFilters() } label: { Label("絞り込みを解除", systemImage: "xmark.circle") }
             }
             Divider()
-            Button { showSettings = true } label: { Label("設定・取り込み", systemImage: "gearshape") }
+            Button { store.showGuide = true } label: { Label("使い方ガイド", systemImage: "questionmark.circle") }
+            Button { showSettings = true } label: { Label("設定", systemImage: "gearshape") }
         } label: { Image(systemName: "ellipsis.circle") }
     }
 
@@ -487,6 +504,11 @@ struct NoteListView: View {
             }
             if wide {
                 ToolbarItem(placement: .bottomBar) { optionsMenu }
+            }
+            // 学習 (期限の来たカード + 未学習)
+            ToolbarItem(placement: .bottomBar) {
+                Button { store.studying = true } label: { Image(systemName: "graduationcap") }
+                    .disabled(!store.hasCollection)
             }
             ToolbarItem(placement: .status) {
                 Text("\(store.filtered.count) 件").font(.footnote).foregroundStyle(.secondary).fixedSize().padding(.horizontal, 8)
@@ -664,36 +686,51 @@ struct SettingsView: View {
     @EnvironmentObject var store: Store
     @Environment(\.dismiss) var dismiss
     @State private var picking = false
+    @State private var confirmUnlink = false
 
     var body: some View {
         NavigationStack {
             Form {
-                Section("コレクション") {
-                    if store.hasCollection {
-                        if let at = store.importedAt { LabeledContent("取り込み", value: at.formatted(date: .abbreviated, time: .shortened)) }
-                        LabeledContent("ノート", value: "\(store.notes.count) 件")
-                        LabeledContent("今日の期限", value: "\(store.notes.filter { store.isDue($0) }.count) 件")
-                    } else {
-                        Text("まだ取り込んでいません").foregroundStyle(.secondary)
-                    }
-                    if store.hasCollection, let name = store.lastImportName {
+                Section {
+                    if let name = store.lastImportName {
+                        LabeledContent("同期中のフォルダ") {
+                            Text(store.syncFolderDisplay ?? name).multilineTextAlignment(.trailing).foregroundStyle(.secondary)
+                        }
+                        if let at = store.importedAt { LabeledContent("最後に取り込み", value: at.formatted(date: .abbreviated, time: .shortened)) }
+                        if let at = store.pushedAt { LabeledContent("最後に書き出し", value: at.formatted(date: .abbreviated, time: .shortened)) }
+                        Picker("同期のタイミング", selection: $store.syncMode) {
+                            Text("アプリを開くたび").tag("auto")
+                            Text("手動のみ").tag("manual")
+                        }
                         Button {
-                            dismiss(); Task { await store.reimport() }
+                            dismiss(); Task { await store.checkForUpdates(force: true); await store.pushNow() }
                         } label: {
                             HStack {
-                                Label("「\(name)」から今すぐ更新", systemImage: "arrow.clockwise")
+                                Label("今すぐ同期", systemImage: "arrow.triangle.2.circlepath")
+                                if store.loading || store.importingMedia { Spacer(); ProgressView().controlSize(.small); Text(store.importProgress).font(.footnote).foregroundStyle(.secondary) }
+                            }
+                        }.disabled(store.loading || store.importingMedia)
+                        Button { picking = true } label: { Label("別のフォルダを選ぶ…", systemImage: "folder") }
+                            .disabled(store.loading || store.importingMedia)
+                        Button(role: .destructive) { confirmUnlink = true } label: { Label("同期を解除", systemImage: "link.badge.minus") }
+                    } else {
+                        Button { picking = true } label: {
+                            HStack {
+                                Label("フォルダを選ぶ…", systemImage: "folder")
                                 if store.loading || store.importingMedia { Spacer(); ProgressView().controlSize(.small); Text(store.importProgress).font(.footnote).foregroundStyle(.secondary) }
                             }
                         }.disabled(store.loading || store.importingMedia)
                     }
-                    Button { picking = true } label: {
-                        HStack {
-                            Label(store.hasCollection ? "別のフォルダを選ぶ…" : "フォルダを取り込む…", systemImage: "folder")
-                            if store.loading || store.importingMedia { Spacer(); ProgressView().controlSize(.small); Text(store.importProgress).font(.footnote).foregroundStyle(.secondary) }
-                        }
-                    }.disabled(store.loading || store.importingMedia)
-                    Text("macOS 版 Carrel で編集を保存すると、iCloud Drive の Carrel/<プロフィール名> に自動で書き出されます。そのフォルダを一度選んでおくと、以後はアプリを開いたときに変更分だけを自動で取り込みます。").font(.footnote).foregroundStyle(.secondary)
                     if let e = store.error { Text(e).font(.footnote).foregroundStyle(.red) }
+                } header: { Text("外部ファイルの同期") } footer: {
+                    Text(store.lastImportName == nil
+                         ? "Anki のコレクション (collection.anki2 と collection.media の入ったフォルダ) を iCloud Drive などに置き、ここで選ぶと、そのカードを Carrel で見る・学ぶ・直すことができます。macOS 版 Carrel の「Anki 連携」で書き出したフォルダを選ぶのが簡単です。同期しなくても、Carrel の中だけでカードを作って学べます。"
+                         : "iPhone で作った・直した・学習した内容はこのフォルダへ自動で書き出され、Mac 側の変更はアプリを開いたときに取り込みます。")
+                }
+                Section("データ") {
+                    LabeledContent("ノート", value: "\(store.notes.count) 件")
+                    LabeledContent("今日の期限", value: "\(store.notes.filter { store.isDue($0) }.count) 件")
+                    Button { dismiss(); store.showGuide = true } label: { Label("使い方ガイド", systemImage: "questionmark.circle") }
                 }
                 Section("表示") {
                     Picker("見た目", selection: $store.appearance) {
@@ -715,19 +752,13 @@ struct SettingsView: View {
                     Toggle("タグを表示", isOn: $store.showTagsInList)
                     Toggle("期限を表示", isOn: $store.showDueInList)
                 }
-                Section("検索のコツ") {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("スペース区切りで すべてを含む カードに絞り込みます。")
-                        Text("-語 でその語を含むカードを除きます。")
-                        Text("tag:名前 / deck:名前 でタグやデッキを指定できます。")
-                        Text("\"二 語\" のように引用符で囲むと句として探します。")
-                    }
-                    .font(.footnote).foregroundStyle(.secondary)
-                }
             }
             .navigationTitle("設定")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完了") { dismiss() } } }
+            .confirmationDialog("同期を解除しますか？", isPresented: $confirmUnlink, titleVisibility: .visible) {
+                Button("解除", role: .destructive) { store.unlinkSyncFolder() }
+            } message: { Text("フォルダとの結びつきを外します。アプリ内のカードはそのまま残り、以後は自動で取り込み・書き出しをしません") }
             .fileImporter(isPresented: $picking, allowedContentTypes: [.folder, .data], allowsMultipleSelection: false) { result in
                 if case .success(let urls) = result, let url = urls.first { dismiss(); Task { await store.importFolder(url) } }
             }

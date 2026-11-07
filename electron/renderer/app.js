@@ -2151,6 +2151,9 @@ async function save({ sync: alsoSync = null } = {}) {
   }
   try {
     if (state.editor) state.editor.flush();
+    // iPhone で先に直されていたら、保存の前にどちらを残すか決めてもらう
+    const proceed = await syncFromMirror({ silentIfNone: true });
+    if (!proceed) return;
     await call('saveNote', {
       id: state.selected.id,
       fields: state.draft.fields,
@@ -2491,6 +2494,103 @@ function askConflicts(list) {
     }
   };
   dialog.showModal();
+}
+
+/* ---------------- iPhone (iCloud) との同期 ---------------- */
+
+/** iPhone 側と食い違うカードを並べて、どちらを残すか選んでもらう。選択 (id → 'mine' | 'theirs') を返す。やめたら null */
+function askMirrorConflicts(list) {
+  return new Promise((resolve) => {
+    const dialog = el('conflictDialog');
+    dialog.querySelector('h2').textContent = 'iPhone と Mac の両方で変更されたカードがあります';
+    dialog.querySelector('p').textContent = 'どちらの内容を残すか選んでください。選んだ方が Anki のコレクションと iCloud の両方に反映されます。';
+    const box = el('conflictList');
+    box.innerHTML = '';
+    const choice = new Map();
+    const when = (secs) => (secs
+      ? new Date(secs * 1000).toLocaleString('ja-JP', { dateStyle: 'short', timeStyle: 'short' })
+      : '不明');
+    for (const item of list) {
+      choice.set(item.id, 'theirs');
+      const names = item.mine.fieldNames || [];
+      const card = document.createElement('div');
+      card.className = 'conflict-note';
+      const title = document.createElement('h3');
+      title.textContent = stripHtml(item.mine.title || '') || ('ノート ' + item.id);
+      card.appendChild(title);
+      for (const side of ['theirs', 'mine']) {
+        const wrap = document.createElement('label');
+        wrap.className = 'conflict-side';
+        const radio = document.createElement('input');
+        radio.type = 'radio';
+        radio.name = 'mconflict-' + item.id;
+        radio.checked = side === 'theirs';
+        radio.onchange = () => choice.set(item.id, side);
+        const meta = document.createElement('span');
+        meta.className = 'meta';
+        meta.textContent = side === 'mine'
+          ? 'この Mac (Anki のコレクション)\n' + when(item.mine.savedAt)
+          : 'iPhone (iCloud)\n' + when(item.theirs.mtimeSecs);
+        const body = side === 'mine'
+          ? conflictSide('mine', null, item.mine.fields, item.theirs.fields, names)
+          : conflictSide('theirs', null, item.theirs.fields, item.mine.fields, names);
+        wrap.append(radio, meta, body);
+        card.appendChild(wrap);
+      }
+      box.appendChild(card);
+    }
+    el('conflictCancel').onclick = () => { dialog.close(); resolve(null); };
+    el('conflictApply').onclick = () => {
+      dialog.close();
+      const out = {};
+      for (const [id, side] of choice) out[id] = side;
+      resolve(out);
+    };
+    dialog.showModal();
+  });
+}
+
+let mirrorSyncing = false;
+/**
+ * iPhone 側 (iCloud) の変更を Anki のコレクションへ取り込む。
+ * 競合があれば選んでもらう。silentIfNone なら変更がないときは何も出さない。
+ * 戻り値: 取り込んだ / 変更なし なら true、ユーザーが「あとで決める」を選んだら false
+ */
+async function syncFromMirror({ silentIfNone = true, theirsAll = false } = {}) {
+  if (mirrorSyncing) return true;
+  mirrorSyncing = true;
+  try {
+    const d = await window.anki.mirrorDiff();
+    if (!d) return true;
+    const a = d.auto || {};
+    const hasAuto = (a.newNotes || a.deleted || a.cards || a.revlog);
+    let choices = {};
+    if (d.conflicts && d.conflicts.length && !theirsAll) {
+      choices = await askMirrorConflicts(d.conflicts);
+      if (!choices) { toast('iPhone の変更の取り込みはあとで決めます'); return false; }
+    }
+    if (!hasAuto && !(d.conflicts && d.conflicts.length)) {
+      if (!silentIfNone) toast('iPhone 側に新しい変更はありません');
+      return true;
+    }
+    const r = await window.anki.mirrorPull(choices, theirsAll);
+    const parts = [];
+    if (r.added) parts.push('追加 ' + r.added);
+    if (r.updated) parts.push('更新 ' + r.updated);
+    if (r.deleted) parts.push('削除 ' + r.deleted);
+    if (r.cards) parts.push('学習・デッキ ' + r.cards);
+    toast(parts.length ? 'iPhone の変更を取り込みました (' + parts.join(' / ') + ')' : 'iPhone と同じ内容です');
+    await refreshAll();
+    if (state.selected) {
+      const again = state.notes.find((n) => n.id === state.selected.id);
+      if (again) await select(again);
+    }
+    return true;
+  } catch (e) {
+    window.anki.mark('iPhone からの取り込み失敗: ' + e.message);
+    if (!silentIfNone) toast('取り込めません: ' + e.message);
+    return true;
+  } finally { mirrorSyncing = false; }
 }
 
 /* ---------------- 同期 ---------------- */
@@ -3659,6 +3759,7 @@ async function boot() {
     titleOf: (note) => noteTitle(note, 2).join(' ').slice(0, 60) || `ノート ${note.id}`,
     sync: () => sync(),
     refreshLogin: async () => { await loadAnkiStatus(); showLoginCall(); await refreshAll(); showLoginCall(); },
+    syncFromMirror,
     ankiStatus: () => window.anki.ankiStatus(),
     ankiSetProfile: (name) => window.anki.ankiSetProfile(name),
     retag: () => applyTagSettings(),
@@ -3737,6 +3838,8 @@ async function boot() {
   await refreshAll();
   clearTimeout(stuck);
   lap('一覧の読み込み');
+  // iPhone 側 (iCloud) の変更があれば取り込む
+  if (state.notes.length) { syncFromMirror({ silentIfNone: true }).catch(() => {}); }
   if (loggedIn()) await restoreSession();
   lap('前回の状態を戻す');
   // ここから先は、画面が出たあとに裏で進める

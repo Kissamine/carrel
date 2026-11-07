@@ -1,5 +1,6 @@
 import Foundation
 import SQLite3
+import CryptoKit
 
 /// Anki のコレクション (SQLite) を読む。書き込みはしない
 final class CollectionDB {
@@ -158,14 +159,107 @@ final class CollectionDB {
     /// 全カード (学習の記録)
     func cards() throws -> [CardInfo] {
         var out: [CardInfo] = []
-        try query("select id, nid, ord, did, queue, type, due, ivl, reps, lapses, flags from cards order by nid, ord") { s in
+        try query("select id, nid, ord, did, queue, type, due, ivl, reps, lapses, flags, factor, left, mod from cards order by nid, ord") { s in
             out.append(CardInfo(id: sqlite3_column_int64(s, 0), noteId: sqlite3_column_int64(s, 1),
                                 ord: Int(sqlite3_column_int(s, 2)), deckId: sqlite3_column_int64(s, 3),
                                 queue: Int(sqlite3_column_int(s, 4)), type: Int(sqlite3_column_int(s, 5)),
                                 due: sqlite3_column_int64(s, 6), ivl: Int(sqlite3_column_int(s, 7)),
                                 reps: Int(sqlite3_column_int(s, 8)), lapses: Int(sqlite3_column_int(s, 9)),
-                                flag: Int(sqlite3_column_int(s, 10)) & 7))
+                                flag: Int(sqlite3_column_int(s, 10)) & 7,
+                                factor: Int(sqlite3_column_int(s, 11)), left: Int(sqlite3_column_int(s, 12)),
+                                mod: sqlite3_column_int64(s, 13)))
         }
         return out
+    }
+
+    // ---- 書き込み (アプリ内の自分のコピーに対して。同期フォルダへは Store が写す) ----
+
+    private static func now() -> Int64 { Int64(Date().timeIntervalSince1970) }
+    private static func nowMs() -> Int64 { Int64(Date().timeIntervalSince1970 * 1000) }
+
+    /// コレクションの更新時刻を進める (Anki が「変わった」と分かるように)
+    func touch() throws {
+        try exec("update col set mod = \(Self.nowMs())")
+    }
+
+    /// 学習の結果でカードを書き換える
+    func updateCard(_ c: CardInfo) throws {
+        try exec("update cards set did = \(c.deckId), queue = \(c.queue), type = \(c.type), due = \(c.due), ivl = \(c.ivl), factor = \(c.factor), reps = \(c.reps), lapses = \(c.lapses), left = \(c.left), flags = \(c.flag), mod = \(Self.now()), usn = -1 where id = \(c.id)")
+    }
+
+    /// 復習の記録 (revlog)。ivl / lastIvl は日数 (学習中は負の秒数)、time はかかった時間 (ミリ秒)
+    func insertRevlog(cardId: Int64, ease: Int, ivl: Int, lastIvl: Int, factor: Int, time: Int, type: Int) throws {
+        var id = Self.nowMs()
+        var dup = false
+        try query("select 1 from revlog where id = \(id)") { _ in dup = true }
+        if dup { id += 1 }
+        try exec("insert into revlog (id, cid, usn, ease, ivl, lastIvl, factor, time, type) values (\(id), \(cardId), -1, \(ease), \(ivl), \(lastIvl), \(factor), \(time), \(type))")
+    }
+
+    /// ノートの本文とタグを書き換える
+    func updateNote(id: Int64, fields: [String], tags: [String]) throws {
+        let flds = fields.joined(separator: "\u{1f}")
+        let sfld = Note.stripHTML(fields.first ?? "")
+        let joined = tags.isEmpty ? "" : " " + tags.joined(separator: " ") + " "
+        try exec("update notes set flds = \(Self.quote(flds)), sfld = \(Self.quote(sfld)), csum = \(Self.checksum(sfld)), tags = \(Self.quote(joined)), mod = \(Self.now()), usn = -1 where id = \(id)")
+    }
+
+    /// ノートを作る。カードは各カードタイプにつき 1 枚 (新規、並びは最後)。作ったノートの id を返す
+    func insertNote(notetypeId: Int64, deckId: Int64, fields: [String], tags: [String], templateCount: Int) throws -> Int64 {
+        var id = Self.nowMs()
+        var dup = false
+        try query("select 1 from notes where id = \(id)") { _ in dup = true }
+        if dup { id += 1 }
+        let flds = fields.joined(separator: "\u{1f}")
+        let sfld = Note.stripHTML(fields.first ?? "")
+        let joined = tags.isEmpty ? "" : " " + tags.joined(separator: " ") + " "
+        try exec("insert into notes (id, guid, mid, mod, usn, tags, flds, sfld, csum, flags, data) values (\(id), \(Self.quote(Self.guid())), \(notetypeId), \(Self.now()), -1, \(Self.quote(joined)), \(Self.quote(flds)), \(Self.quote(sfld)), \(Self.checksum(sfld)), 0, '')")
+        var pos: Int64 = 0
+        try query("select coalesce(max(due), 0) from cards where type = 0") { s in pos = sqlite3_column_int64(s, 0) }
+        for ord in 0..<max(1, templateCount) {
+            let cid = id + Int64(ord) + 1
+            try exec("insert into cards (id, nid, did, ord, mod, usn, type, queue, due, ivl, factor, reps, lapses, left, odue, odid, flags, data) values (\(cid), \(id), \(deckId), \(ord), \(Self.now()), -1, 0, 0, \(pos + 1), 0, 0, 0, 0, 0, 0, 0, 0, '')")
+        }
+        return id
+    }
+
+    /// ノートとそのカードを消す。Anki と同じく graves に記録して、同期で消えたことが伝わるようにする
+    func deleteNote(id: Int64) throws {
+        var cids: [Int64] = []
+        try query("select id from cards where nid = \(id)") { s in cids.append(sqlite3_column_int64(s, 0)) }
+        for cid in cids { try exec("insert into graves (usn, oid, type) values (-1, \(cid), 0)") }
+        try exec("insert into graves (usn, oid, type) values (-1, \(id), 1)")
+        try exec("delete from cards where nid = \(id)")
+        try exec("delete from notes where id = \(id)")
+    }
+
+    /// 一貫した形で別の場所へ写す (WAL の内容も含めて)
+    func backup(to dest: URL) throws {
+        var out: OpaquePointer?
+        guard sqlite3_open_v2(dest.path, &out, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, nil) == SQLITE_OK, let out else {
+            throw NSError(domain: "AnkiPreview", code: 6, userInfo: [NSLocalizedDescriptionKey: "書き出し先を開けません"])
+        }
+        defer { sqlite3_close(out) }
+        guard let b = sqlite3_backup_init(out, "main", db, "main") else {
+            throw NSError(domain: "AnkiPreview", code: 7, userInfo: [NSLocalizedDescriptionKey: String(cString: sqlite3_errmsg(out))])
+        }
+        sqlite3_backup_step(b, -1)
+        sqlite3_backup_finish(b)
+    }
+
+    /// Anki と同じ: 最初の欄 (HTML を落としたもの) の SHA1 の先頭 8 桁
+    private static func checksum(_ s: String) -> Int64 {
+        let digest = Insecure.SHA1.hash(data: Data(s.utf8))
+        let hex = digest.map { String(format: "%02x", $0) }.joined().prefix(8)
+        return Int64(hex, radix: 16) ?? 0
+    }
+
+    /// Anki と同じ 10 文字の guid
+    private static func guid() -> String {
+        let table = Array("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!#$%&()*+,-./:;<=>?@[]^_`{|}~")
+        var n = UInt64.random(in: 1...UInt64.max)
+        var out = ""
+        while n > 0 { out.append(table[Int(n % UInt64(table.count))]); n /= UInt64(table.count) }
+        return String(out.prefix(10))
     }
 }

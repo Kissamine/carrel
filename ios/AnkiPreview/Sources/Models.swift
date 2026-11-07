@@ -86,13 +86,18 @@ struct CardInfo: Identifiable, Hashable {
     let noteId: Int64
     let ord: Int
     var deckId: Int64
-    let queue: Int
-    let type: Int
-    let due: Int64
-    let ivl: Int
-    let reps: Int
-    let lapses: Int
-    let flag: Int
+    var queue: Int
+    var type: Int
+    var due: Int64
+    var ivl: Int
+    var reps: Int
+    var lapses: Int
+    var flag: Int
+    /// 易しさ (‰)。Anki の既定は 2500
+    var factor: Int = 2500
+    /// 学習ステップの残り
+    var left: Int = 0
+    var mod: Int64 = 0
 
     enum Status: String { case new = "未学習", learning = "学習中", review = "復習中", suspended = "停止中", buried = "保留中" }
     var status: Status {

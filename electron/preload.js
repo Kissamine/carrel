@@ -48,6 +48,8 @@ contextBridge.exposeInMainWorld('anki', {
   ankiLaunch: () => ipcRenderer.invoke('anki:launch'),
   mirrorNow: (force) => ipcRenderer.invoke('mirror:now', force),
   mirrorStatus: () => ipcRenderer.invoke('mirror:status'),
+  mirrorDiff: () => ipcRenderer.invoke('mirror:diff'),
+  mirrorPull: (choices, theirsAll) => ipcRenderer.invoke('mirror:pull', choices, theirsAll),
   mirrorSetEnabled: (on) => ipcRenderer.invoke('mirror:setEnabled', on),
   onWindowBlur: (fn) => ipcRenderer.on('window-blur', () => fn()),
   onWindowFocus: (fn) => ipcRenderer.on('window-focus', () => fn()),

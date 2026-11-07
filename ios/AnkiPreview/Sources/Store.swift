@@ -3,6 +3,9 @@ import SwiftUI
 import Combine
 
 /// 検索欄の文字列を分解したもの。スペース区切りで AND、"-語" で除外、tag: / deck: で絞り込み、"…" で句
+/// 作成・編集の対象。note が nil なら新規
+struct EditTarget: Identifiable { let note: Note?; var id: Int64 { note?.id ?? 0 } }
+
 struct SearchQuery {
     var terms: [String] = []
     var excluded: [String] = []
@@ -83,6 +86,15 @@ final class Store: ObservableObject {
     @Published var loading = false
     @Published var error: String? = nil
     @Published var importedAt: Date? = UserDefaults.standard.object(forKey: "importedAt") as? Date
+    /// 外部ファイルの同期: auto = アプリを開くたび / manual = 手動だけ
+    @AppStorage("syncMode") var syncMode: String = "auto"
+    /// 起動直後、同期フォルダの更新を確かめている間 (この間はアイコンの起動画面を見せる)
+    @Published var checking = false
+    /// 最後に同期フォルダへ書き出した時刻
+    @Published var pushedAt: Date? = UserDefaults.standard.object(forKey: "pushedAt") as? Date
+    /// 同期フォルダへ写すのを待っている変更があるか
+    @Published var pendingPush = false
+    private var pushTimer: Timer?
 
     @AppStorage("textZoom") var textZoom: Double = 1.0
     /// 表示する面: front / back
@@ -129,13 +141,175 @@ final class Store: ObservableObject {
         return try? col.resourceValues(forKeys: keys).contentModificationDate
     }
 
-    /// アプリを開いたとき: Mac 側 (iCloud) のコレクションが前回より新しければ、裏で取り込み直す
-    func checkForUpdates() async {
+    /// アプリを開いたとき: 同期フォルダのコレクションが前回より新しければ、裏で取り込み直す。
+    /// force = true なら設定が「手動」でも確かめる (設定画面の「今すぐ同期」)
+    func checkForUpdates(force: Bool = false) async {
+        guard force || syncMode == "auto" else { return }
         guard !loading, !importingMedia, let url = lastImportURL else { return }
+        checking = true
+        defer { checking = false }
+        // 自分の変更が未送信なら、先に送ってから確かめる (取り込みで上書きされないように)
+        if pendingPush { await pushNow() }
         let last = UserDefaults.standard.object(forKey: "importSourceMod") as? Date
         let mod = await Task.detached { Self.sourceModified(url) }.value
         guard let mod, last == nil || mod > last! else { return }
         await importFolder(url)
+    }
+
+    /// 同期フォルダの表示用パス (iCloud Drive/Carrel/KSMN のように)
+    var syncFolderDisplay: String? {
+        guard let url = lastImportURL else { return nil }
+        let p = url.path
+        if let r = p.range(of: "com~apple~CloudDocs/") { return "iCloud Drive/" + p[r.upperBound...] }
+        return url.lastPathComponent
+    }
+
+    /// 同期を解除する (アプリ内のデータはそのまま残す)
+    func unlinkSyncFolder() {
+        pushTimer?.invalidate(); pendingPush = false
+        for k in ["importBookmark", "importName", "importSourceMod"] { UserDefaults.standard.removeObject(forKey: k) }
+        objectWillChange.send()
+    }
+
+    // ---- 同期フォルダへの書き出し (アプリ内で作った・直した内容を Mac 側へ) ----
+
+    /// 変更のあと少し待ってから写す (続けて操作しても 1 回にまとめる)
+    private func schedulePush() {
+        pendingPush = true
+        pushTimer?.invalidate()
+        pushTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: false) { [weak self] _ in
+            Task { @MainActor in await self?.pushNow() }
+        }
+    }
+
+    /// 同期フォルダへ今すぐ写す (collection.anki2 を一貫した形で書き出す)
+    func pushNow() async {
+        pushTimer?.invalidate()
+        guard let url = lastImportURL, hasCollection else { pendingPush = false; return }
+        let src = Self.collectionPath
+        let result: Result<Date?, Error> = await Task.detached(priority: .utility) {
+            let ok = url.startAccessingSecurityScopedResource()
+            defer { if ok { url.stopAccessingSecurityScopedResource() } }
+            do {
+                let db = try CollectionDB(path: src.path)
+                let tmp = url.appendingPathComponent("collection.incoming")
+                try? FileManager.default.removeItem(at: tmp)
+                try db.backup(to: tmp)
+                let dest = url.appendingPathComponent("collection.anki2")
+                var coordErr: NSError?
+                var innerErr: Error?
+                NSFileCoordinator().coordinate(writingItemAt: dest, options: .forReplacing, error: &coordErr) { d in
+                    do { _ = try FileManager.default.replaceItemAt(d, withItemAt: tmp) } catch { innerErr = error }
+                }
+                if let e = coordErr ?? (innerErr as NSError?) { throw e }
+                for side in ["collection.anki2-wal", "collection.anki2-shm"] { try? FileManager.default.removeItem(at: url.appendingPathComponent(side)) }
+                return .success(Self.sourceModified(url))
+            } catch { return .failure(error) }
+        }.value
+        switch result {
+        case .success(let mod):
+            pendingPush = false
+            pushedAt = Date(); UserDefaults.standard.set(pushedAt, forKey: "pushedAt")
+            // 自分が書いたものを「Mac 側の更新」と取り違えて取り込み直さないように
+            if let mod { UserDefaults.standard.set(mod, forKey: "importSourceMod") }
+        case .failure(let e):
+            error = "同期フォルダへ書き出せません: " + e.localizedDescription
+        }
+    }
+
+    /// 書き込みを 1 つ行い、同期フォルダへの書き出しを予約する
+    private func write(_ body: (CollectionDB) throws -> Void) -> Bool {
+        do {
+            let db = try CollectionDB(path: Self.collectionPath.path)
+            try body(db)
+            try db.touch()
+        } catch { self.error = error.localizedDescription; return false }
+        schedulePush()
+        return true
+    }
+
+    private func rebuildTags() {
+        var count: [String: Int] = [:]
+        for n in notes { for t in n.tags { count[t, default: 0] += 1 } }
+        allTags = count.sorted { $0.value != $1.value ? $0.value > $1.value : $0.key < $1.key }
+    }
+
+    // ---- ノートの作成・編集・削除 ----
+
+    /// 新しいノートを作る。作ったノートを選ぶ
+    func addNote(notetypeId: Int64, deckId: Int64, fields: [String], tags: [String]) {
+        guard let nt = notetypes[notetypeId] else { return }
+        let clean = Array(NSOrderedSet(array: tags.map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty })) as! [String]
+        var newId: Int64 = 0
+        guard write({ db in newId = try db.insertNote(notetypeId: notetypeId, deckId: deckId, fields: fields, tags: clean, templateCount: nt.templates.count) }) else { return }
+        let now = Int64(Date().timeIntervalSince1970)
+        let note = Note(id: newId, notetypeId: notetypeId, fields: fields, tags: clean, modified: now)
+        notes.append(note)
+        noteDecks[newId] = deckId
+        cards[newId] = (0..<max(1, nt.templates.count)).map { ord in
+            CardInfo(id: newId + Int64(ord) + 1, noteId: newId, ord: ord, deckId: deckId, queue: 0, type: 0, due: 0, ivl: 0, reps: 0, lapses: 0, flag: 0, factor: 0, left: 0, mod: now)
+        }
+        rebuildTags(); refilter()
+        selectedNoteId = newId
+    }
+
+    /// 本文とタグを書き換える
+    func updateNote(_ note: Note, fields: [String], tags: [String]) {
+        let clean = Array(NSOrderedSet(array: tags.map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty })) as! [String]
+        guard write({ db in try db.updateNote(id: note.id, fields: fields, tags: clean) }) else { return }
+        if let i = notes.firstIndex(where: { $0.id == note.id }) {
+            notes[i] = Note(id: note.id, notetypeId: note.notetypeId, fields: fields, tags: clean, modified: Int64(Date().timeIntervalSince1970))
+        }
+        rebuildTags(); refilter()
+    }
+
+    /// ノートを消す
+    func deleteNote(_ note: Note) {
+        guard write({ db in try db.deleteNote(id: note.id) }) else { return }
+        notes.removeAll { $0.id == note.id }
+        cards[note.id] = nil; noteDecks[note.id] = nil
+        if selectedNoteId == note.id { selectedNoteId = nil }
+        rebuildTags(); refilter()
+    }
+
+    // ---- 学習 ----
+
+    /// いま学習すべきカード (期限の来た復習・学習中 → 新規の順)。deck が nil なら全デッキ
+    func studyQueue(deck: Int64?, newLimit: Int = 20) -> [CardInfo] {
+        let all = cards.values.flatMap { $0 }.filter { deck == nil || $0.deckId == deck! }
+        let due = all.filter { $0.queue != 0 && Scheduler.isDue($0, crt: crt) }.sorted { $0.due < $1.due }
+        let fresh = all.filter { $0.queue == 0 }.sorted { $0.due < $1.due }.prefix(newLimit)
+        return due + fresh
+    }
+
+    /// 答えを付けて記録する。次の状態のカードを返す
+    @discardableResult
+    func answer(_ card: CardInfo, ease: Scheduler.Ease, spentMs: Int) -> CardInfo {
+        let r = Scheduler.answer(card, ease: ease, crt: crt)
+        var c = r.card
+        c.mod = Int64(Date().timeIntervalSince1970)
+        guard write({ db in
+            try db.updateCard(c)
+            try db.insertRevlog(cardId: c.id, ease: ease.rawValue, ivl: r.revlogIvl, lastIvl: r.lastIvl, factor: c.factor, time: min(60000, spentMs), type: r.revlogType)
+        }) else { return card }
+        if var cs = cards[c.noteId], let i = cs.firstIndex(where: { $0.id == c.id }) { cs[i] = c; cards[c.noteId] = cs }
+        refilter()
+        return c
+    }
+
+    /// カードの状態 (停止など) を書き換える
+    func setCardQueue(_ c: CardInfo) {
+        var c = c; c.mod = Int64(Date().timeIntervalSince1970)
+        guard write({ db in try db.updateCard(c) }) else { return }
+        if var cs = cards[c.noteId], let i = cs.firstIndex(where: { $0.id == c.id }) { cs[i] = c; cards[c.noteId] = cs }
+        refilter()
+    }
+
+    /// 学習用の HTML (表か裏)
+    func studyHTML(card: CardInfo, back: Bool, dark: Bool) -> String {
+        guard let note = notes.first(where: { $0.id == card.noteId }), let nt = notetypes[note.notetypeId] else { return "" }
+        let r = TemplateRenderer.render(note: note, notetype: nt, templateIndex: min(card.ord, max(0, nt.templates.count - 1)))
+        return TemplateRenderer.page(body: back ? (r.back.isEmpty ? r.front : r.back) : r.front, css: nt.css, textZoom: textZoom, dark: dark, hasNightCSS: nt.hasNightCSS)
     }
 
     /// 取り込みの進み具合 (画面に出す)
@@ -234,6 +408,10 @@ final class Store: ObservableObject {
     @Published var mediaVersion = 0
     /// 拡大表示中の画像 (画面全体に対して出すため、ここで持つ)
     @Published var lightbox: LightboxItem? = nil
+    /// 作成・編集中のノート (nil のノートは新規)
+    @Published var editing: EditTarget? = nil
+    @Published var studying = false
+    @Published var showGuide = false
 
     nonisolated private static func exists(_ url: URL) -> Bool {
         var isDir: ObjCBool = false
@@ -303,10 +481,7 @@ final class Store: ObservableObject {
 
     func setTags(_ note: Note, _ tags: [String]) {
         let clean = Array(NSOrderedSet(array: tags.map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty })) as! [String]
-        do {
-            let db = try CollectionDB(path: Self.collectionPath.path)
-            try db.setTags(noteId: note.id, tags: clean)
-        } catch { self.error = "タグを書き換えられません: " + error.localizedDescription; return }
+        guard write({ db in try db.setTags(noteId: note.id, tags: clean) }) else { return }
         if let i = notes.firstIndex(where: { $0.id == note.id }) {
             notes[i] = Note(id: note.id, notetypeId: note.notetypeId, fields: note.fields, tags: clean, modified: Int64(Date().timeIntervalSince1970))
         }
@@ -317,10 +492,7 @@ final class Store: ObservableObject {
     }
 
     func setDeck(_ note: Note, _ deckId: Int64) {
-        do {
-            let db = try CollectionDB(path: Self.collectionPath.path)
-            try db.setDeck(noteId: note.id, deckId: deckId)
-        } catch { self.error = "デッキを変えられません: " + error.localizedDescription; return }
+        guard write({ db in try db.setDeck(noteId: note.id, deckId: deckId) }) else { return }
         noteDecks[note.id] = deckId
         if var cs = cards[note.id] {
             for i in cs.indices { cs[i].deckId = deckId }
