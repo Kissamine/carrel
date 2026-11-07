@@ -206,12 +206,13 @@ struct StudyView: View {
                 if let card = current, let note = store.notes.first(where: { $0.id == card.noteId }) {
                     let dark = scheme == .dark
                     let bg = store.cardBackground(for: note, dark: dark) ?? Color(.systemBackground)
-                    // ボタンのバーはカードの上に重ねる (地は透明)。カードはバーの下までスクロールでき、Liquid Glass が中身を透かす
+                    // カードは画面いっぱい (上下の余白なし)。カウンターとボタンはその上に重ねる (地は透明) ので、
+                    // Liquid Glass が中身を透かす。中身がボタンに隠れないぶんは HTML 側の余白でとる
                     PreviewView(html: store.studyHTML(card: card, back: showBack, dark: dark), mediaDir: Store.mediaDir,
                                 highlights: [], controller: preview,
                                 onImage: { url in store.lightbox = LightboxItem(url: url) })
-                        .padding(.top, 34)   // 固定のカウンターの下に少し余白をとる
-                        .safeAreaInset(edge: .bottom, spacing: 0) { answerBar(card) }
+                        .ignoresSafeArea()
+                        .overlay(alignment: .bottom) { answerBar(card) }
                     // カウンター (プレビューの「1 / 114」と同じ見た目)。スクロールしても動かないよう、カードの上に重ねて固定
                     .overlay(alignment: .top) {
                         Text("\(min(done + 1, total)) / \(total)")
@@ -220,9 +221,8 @@ struct StudyView: View {
                             .glassEffect(.regular, in: Capsule())
                             .padding(.top, 4)
                     }
-                    .background(bg)
-                    .toolbarBackground(bg, for: .navigationBar)
-                    .toolbarBackground(.visible, for: .navigationBar)
+                    .background(bg.ignoresSafeArea())
+                    .toolbarBackground(.hidden, for: .navigationBar)
                     .toolbarColorScheme(bg.isDark ? .dark : .light, for: .navigationBar)
                 } else {
                     ContentUnavailableView {
@@ -275,13 +275,10 @@ struct StudyView: View {
             } else {
                 ForEach(Scheduler.Ease.allCases, id: \.rawValue) { ease in
                     Button { answer(card, ease) } label: {
-                        VStack(spacing: 2) {
-                            Text(ease.label).font(.title2.weight(.semibold))
-                            Text(Scheduler.preview(card, ease: ease, crt: store.crt)).font(.caption2).opacity(0.8)
-                        }
-                        .frame(maxWidth: .infinity).padding(.vertical, 4)
+                        Text(ease.label).font(.title2.weight(.bold))
+                            .frame(maxWidth: .infinity).padding(.vertical, 10)
                     }
-                    .buttonStyle(.glass)
+                    .buttonStyle(.glassProminent)
                     .tint(color(for: ease))
                 }
             }

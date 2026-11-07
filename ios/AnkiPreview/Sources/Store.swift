@@ -382,7 +382,9 @@ final class Store: ObservableObject {
     func studyHTML(card: CardInfo, back: Bool, dark: Bool) -> String {
         guard let note = notes.first(where: { $0.id == card.noteId }), let nt = notetypes[note.notetypeId] else { return "" }
         let r = TemplateRenderer.render(note: note, notetype: nt, templateIndex: min(card.ord, max(0, nt.templates.count - 1)))
-        return TemplateRenderer.page(body: back ? (r.back.isEmpty ? r.front : r.back) : r.front, css: nt.css, textZoom: textZoom, dark: dark, hasNightCSS: nt.hasNightCSS)
+        // 画面いっぱいに出すので、上はカウンター、下はボタンに隠れないぶんの余白を中身側でとる
+        let css = nt.css + "\nhtml, body { padding-top: 56px !important; padding-bottom: 110px !important; }"
+        return TemplateRenderer.page(body: back ? (r.back.isEmpty ? r.front : r.back) : r.front, css: css, textZoom: textZoom, dark: dark, hasNightCSS: nt.hasNightCSS)
     }
 
     /// 取り込みの進み具合 (画面に出す)
