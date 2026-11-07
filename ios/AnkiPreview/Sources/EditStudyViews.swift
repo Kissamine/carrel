@@ -276,10 +276,10 @@ struct StudyView: View {
                 ForEach(Scheduler.Ease.allCases, id: \.rawValue) { ease in
                     Button { answer(card, ease) } label: {
                         Text(ease.label).font(.title2.weight(.bold))
+                            .foregroundStyle(color(for: ease))
                             .frame(maxWidth: .infinity).padding(.vertical, 10)
                     }
-                    .buttonStyle(.glassProminent)
-                    .tint(color(for: ease))
+                    .buttonStyle(.glass)
                 }
             }
         }
