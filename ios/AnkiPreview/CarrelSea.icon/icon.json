@@ -19,43 +19,10 @@
     {
       "layers": [
         {
-          "image-name": "C.svg",
-          "name": "C",
-          "fill": {
-            "solid": "display-p3:1.00000,1.00000,1.00000,1.00000"
-          },
-          "fill-specializations": [
-            {
-              "value": {
-                "solid": "display-p3:1.00000,1.00000,1.00000,1.00000"
-              }
-            },
-            {
-              "appearance": "dark",
-              "value": {
-                "solid": "display-p3:1.00000,1.00000,1.00000,1.00000"
-              }
-            }
-          ],
+          "image-name": "Artwork.png",
+          "name": "Artwork",
           "glass": false,
           "specular": false
-        }
-      ],
-      "shadow": {
-        "kind": "neutral",
-        "opacity": 0.35
-      },
-      "translucency": {
-        "enabled": false,
-        "value": 0
-      },
-      "lighting": "individual"
-    },
-    {
-      "layers": [
-        {
-          "image-name": "Background.png",
-          "name": "Background"
         }
       ],
       "shadow": {
@@ -65,7 +32,8 @@
       "translucency": {
         "enabled": false,
         "value": 0
-      }
+      },
+      "lighting": "individual"
     }
   ],
   "supported-platforms": {
