@@ -172,7 +172,9 @@ final class Store: ObservableObject {
     }
 
     /// チュートリアル (初回は自動で出す。使い方ガイドからいつでも)
-    @Published var showTutorial = !UserDefaults.standard.bool(forKey: "tutorialShown")
+    @Published var showTutorial = !UserDefaults.standard.bool(forKey: "tutorialShown") {
+        didSet { if showTutorial { UserDefaults.standard.set(true, forKey: "tutorialShown") } }
+    }
     func tutorialDone() { UserDefaults.standard.set(true, forKey: "tutorialShown"); showTutorial = false }
 
     /// 前回取り込んだフォルダ (ブックマーク)。選び直さずに更新できるように覚えておく

@@ -493,7 +493,7 @@ struct GuideView: View {
                     guide("同期をやめる", "設定の「同期を解除」で、フォルダとの結びつきを外せます。アプリ内のカードはそのまま残ります。同期しなくても、Carrel の中だけでカードを作って学べます。")
                 }
                 Section("Anki について") {
-                    Text("Carrel は Anki (Ankitects) とは無関係の独立したアプリで、AnkiWeb には接続しません。Anki のコレクションを読み書きするのは、お使いの端末と iCloud Drive の中だけです。")
+                    Text("Carrel は Anki (Ankitects) とは無関係の独立したアプリで、AnkiWeb には接続しません。")
                         .font(.footnote).foregroundStyle(.secondary)
                 }
             }
@@ -517,77 +517,264 @@ struct GuideView: View {
 struct TutorialView: View {
     @EnvironmentObject var store: Store
     @Environment(\.dismiss) var dismiss
+    @Environment(\.colorScheme) var scheme
     @State private var page = 0
 
-    private struct Page { let icon: String; let title: String; let body: String; let color: Color }
+    private struct Page { let title: String; let body: String; let color: Color }
     private let pages: [Page] = [
-        Page(icon: "rectangle.on.rectangle", title: "Carrel へようこそ",
-             body: "暗記カードを、見て・学んで・作れるアプリです。英単語、資格試験、医学など、覚えたいことは何でも。まずはサンプルのカードが 3 枚入っています。", color: .carrelBlue),
-        Page(icon: "list.bullet.rectangle", title: "カードを見る",
-             body: "一覧からカードを選ぶと内容が表示されます。右上の「表 / 裏」で面を切り替え、ロゴの下のタグや検索で絞り込めます。", color: .teal),
-        Page(icon: "graduationcap", title: "学習する",
-             body: "下の帽子ボタンで学習を始めます。答えを見てから × △ ○ ◎ で評価すると、忘れそうな頃に同じカードがまた出てきます (間隔反復)。", color: .green),
-        Page(icon: "square.and.pencil", title: "作る・直す",
-             body: "メニューの「新しいカード」で作成、カード表示中の鉛筆で編集。本文は文章としてもそのまま HTML としても書けます。", color: .orange),
-        Page(icon: "arrow.triangle.2.circlepath.icloud", title: "ほかの端末と同期 (任意)",
-             body: "設定の「外部ファイルの同期」で iCloud Drive のフォルダを選ぶと、macOS 版 Carrel や Anki 形式のファイルとカードを共有できます。使わなくても、この端末だけで完結します。", color: .purple),
+        Page(title: "Carrel へようこそ",
+             body: "暗記カードを、見て・学んで・作れるアプリ。英単語、資格試験、医学など、覚えたいことは何でも。まずはサンプルのカードが 3 枚入っています。", color: .carrelBlue),
+        Page(title: "カードを見る",
+             body: "一覧からカードを選ぶと内容が表示されます。右上の「表 / 裏」で面を切り替え、タグや検索で絞り込めます。", color: .teal),
+        Page(title: "学習する",
+             body: "帽子のボタンで学習開始。答えを見てから × △ ○ ◎ で評価すると、忘れそうな頃に同じカードがまた出てきます。", color: .green),
+        Page(title: "作る・直す",
+             body: "「新しいカード」で作成、カード表示中の鉛筆で編集。文章としても、HTML のままでも書けます。", color: .orange),
+        Page(title: "ほかの端末と同期 (任意)",
+             body: "iCloud Drive のフォルダを選ぶと、Anki 形式のファイルとしてほかの端末やエディターとカードを共有できます。使わなくても、この端末だけで完結します。", color: .purple),
     ]
 
     var body: some View {
-        VStack(spacing: 0) {
-            TabView(selection: $page) {
-                ForEach(Array(pages.enumerated()), id: \.offset) { i, p in
-                    VStack(spacing: 22) {
-                        Spacer()
-                        Image(systemName: p.icon)
-                            .font(.system(size: 64, weight: .light))
-                            .foregroundStyle(p.color)
-                            .frame(width: 140, height: 140)
-                            .background(p.color.opacity(0.12), in: Circle())
-                        Text(p.title).font(.title2.weight(.bold))
-                        Text(p.body).font(.body).foregroundStyle(.secondary)
-                            .multilineTextAlignment(.center).lineSpacing(4)
-                            .padding(.horizontal, 32)
-                        Spacer()
-                        Spacer()
+        let p = pages[page]
+        ZStack {
+            // 背景: ページの色をごく薄く上から落とす
+            LinearGradient(colors: [p.color.opacity(scheme == .dark ? 0.28 : 0.18), Color(.systemBackground)], startPoint: .top, endPoint: .center)
+                .ignoresSafeArea()
+                .animation(.easeInOut(duration: 0.4), value: page)
+            VStack(spacing: 0) {
+                TabView(selection: $page) {
+                    ForEach(Array(pages.enumerated()), id: \.offset) { i, pg in
+                        VStack(spacing: 26) {
+                            Spacer(minLength: 10)
+                            TutorialArt(index: i, color: pg.color)
+                                .frame(height: 260)
+                                .padding(.horizontal, 28)
+                            VStack(spacing: 12) {
+                                Text(pg.title).font(.title.weight(.bold))
+                                Text(pg.body).font(.callout).foregroundStyle(.secondary)
+                                    .multilineTextAlignment(.center).lineSpacing(4)
+                                    .padding(.horizontal, 32)
+                            }
+                            Spacer()
+                        }
+                        .tag(i)
                     }
-                    .tag(i)
                 }
-            }
-            .tabViewStyle(.page(indexDisplayMode: .always))
-            .indexViewStyle(.page(backgroundDisplayMode: .always))
+                .tabViewStyle(.page(indexDisplayMode: .always))
+                .indexViewStyle(.page(backgroundDisplayMode: .always))
 
-            HStack {
-                if page < pages.count - 1 {
-                    Button("スキップ") { dismiss() }.foregroundStyle(.secondary)
-                    Spacer()
-                    Button { withAnimation { page += 1 } } label: {
-                        Text("次へ").font(.headline).frame(minWidth: 120).padding(.vertical, 6)
+                HStack {
+                    if page < pages.count - 1 {
+                        Button("スキップ") { dismiss() }.foregroundStyle(.secondary)
+                        Spacer()
+                        Button { withAnimation { page += 1 } } label: {
+                            Text("次へ").font(.headline).frame(minWidth: 120).padding(.vertical, 6)
+                        }
+                        .buttonStyle(.glassProminent).tint(Color.carrelBlueDeep)
+                    } else {
+                        Spacer()
+                        Button { dismiss() } label: {
+                            Text("はじめる").font(.headline).frame(minWidth: 160).padding(.vertical, 6)
+                        }
+                        .buttonStyle(.glassProminent).tint(Color.carrelBlueDeep)
+                        Spacer()
                     }
-                    .buttonStyle(.glassProminent).tint(Color.carrelBlueDeep)
-                } else {
-                    Spacer()
-                    Button { dismiss() } label: {
-                        Text("はじめる").font(.headline).frame(minWidth: 160).padding(.vertical, 6)
+                }
+                .padding(.horizontal, 24).padding(.bottom, 24)
+            }
+        }
+    }
+}
+
+/// チュートリアルの挿絵 (SwiftUI で描く。テーマの色に追従)
+struct TutorialArt: View {
+    let index: Int
+    let color: Color
+    /// 同梱のアイコン画像 (アセットカタログでなく素のファイルなので、パスから読む)
+    static let appIconImage: UIImage = {
+        if let path = Bundle.main.path(forResource: "CarrelIcon", ofType: "png"), let img = UIImage(contentsOfFile: path) { return img }
+        return UIImage(systemName: "c.circle.fill") ?? UIImage()
+    }()
+    @Environment(\.colorScheme) var scheme
+
+    private var cardFill: Color { scheme == .dark ? Color(white: 0.16) : .white }
+    private var line: Color { scheme == .dark ? Color(white: 0.36) : Color(white: 0.82) }
+    private var lineSoft: Color { scheme == .dark ? Color(white: 0.26) : Color(white: 0.9) }
+
+    var body: some View {
+        switch index {
+        case 0: welcome
+        case 1: browse
+        case 2: study
+        case 3: edit
+        default: sync
+        }
+    }
+
+    /// 1: 重なったカードとアプリのアイコン
+    private var welcome: some View {
+        ZStack {
+            ForEach(0..<3, id: \.self) { i in
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(cardFill)
+                    .shadow(color: .black.opacity(0.18), radius: 10, y: 6)
+                    .frame(width: 190, height: 130)
+                    .rotationEffect(.degrees(Double(i - 1) * 9))
+                    .offset(x: CGFloat(i - 1) * 26, y: CGFloat(i - 1) * -6)
+            }
+            Image(uiImage: Self.appIconImage)
+                .resizable().scaledToFit().frame(width: 92, height: 92)
+                .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                .shadow(color: color.opacity(0.45), radius: 22, y: 8)
+                .offset(y: 8)
+        }
+    }
+
+    /// 2: 一覧とプレビュー
+    private var browse: some View {
+        HStack(spacing: 14) {
+            VStack(alignment: .leading, spacing: 10) {
+                ForEach(0..<4, id: \.self) { i in
+                    VStack(alignment: .leading, spacing: 6) {
+                        Capsule().fill(i == 1 ? color : line).frame(width: i == 1 ? 86 : [70, 86, 60, 78][i], height: 9)
+                        HStack(spacing: 4) {
+                            Capsule().fill(lineSoft).frame(width: 28, height: 7)
+                            Capsule().fill(lineSoft).frame(width: 20, height: 7)
+                        }
                     }
-                    .buttonStyle(.glassProminent).tint(Color.carrelBlueDeep)
-                    Spacer()
+                    .padding(10)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(i == 1 ? color.opacity(0.15) : .clear, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                 }
             }
-            .padding(.horizontal, 24).padding(.bottom, 24)
+            .frame(width: 130)
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(cardFill)
+                .shadow(color: .black.opacity(0.18), radius: 10, y: 6)
+                .overlay(alignment: .topLeading) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Q.").font(.caption.weight(.bold)).foregroundStyle(color)
+                        Capsule().fill(line).frame(width: 110, height: 10)
+                        Capsule().fill(line).frame(width: 80, height: 10)
+                        Rectangle().fill(lineSoft).frame(height: 1).padding(.vertical, 6)
+                        Capsule().fill(lineSoft).frame(width: 120, height: 8)
+                        Capsule().fill(lineSoft).frame(width: 96, height: 8)
+                        Capsule().fill(lineSoft).frame(width: 110, height: 8)
+                    }
+                    .padding(18)
+                }
         }
-        .interactiveDismissDisabled(false)
+        .padding(.horizontal, 8)
+    }
+
+    /// 3: カードと評価ボタン
+    private var study: some View {
+        VStack(spacing: 18) {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(cardFill)
+                .shadow(color: .black.opacity(0.18), radius: 10, y: 6)
+                .frame(height: 150)
+                .overlay {
+                    VStack(spacing: 10) {
+                        Capsule().fill(line).frame(width: 150, height: 11)
+                        Capsule().fill(line).frame(width: 100, height: 11)
+                        Spacer().frame(height: 4)
+                        Capsule().fill(color.opacity(0.35)).frame(width: 120, height: 9)
+                    }
+                }
+            HStack(spacing: 10) {
+                ForEach(Array(zip(["×", "△", "○", "◎"], [Color.red, .orange, .green, .blue])), id: \.0) { sym, c in
+                    Text(sym).font(.title2.weight(.bold)).foregroundStyle(c)
+                        .frame(maxWidth: .infinity, minHeight: 26).padding(.vertical, 8)
+                        .background(cardFill, in: Capsule())
+                        .overlay(Capsule().stroke(line, lineWidth: 1))
+                }
+            }
+        }
+        .padding(.horizontal, 10)
+    }
+
+    /// 4: 編集画面
+    private var edit: some View {
+        RoundedRectangle(cornerRadius: 18, style: .continuous)
+            .fill(cardFill)
+            .shadow(color: .black.opacity(0.18), radius: 10, y: 6)
+            .overlay(alignment: .topLeading) {
+                VStack(alignment: .leading, spacing: 12) {
+                    ForEach(["表", "裏", "タグ"], id: \.self) { name in
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(name).font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
+                            if name == "タグ" {
+                                HStack(spacing: 6) {
+                                    ForEach(["英単語", "重要"], id: \.self) { t in
+                                        Text(t).font(.caption2).padding(.horizontal, 8).padding(.vertical, 3)
+                                            .background(color.opacity(0.15), in: Capsule()).foregroundStyle(color)
+                                    }
+                                    Image(systemName: "plus.circle").font(.caption).foregroundStyle(.secondary)
+                                }
+                            } else {
+                                RoundedRectangle(cornerRadius: 8).fill(lineSoft).frame(height: name == "表" ? 34 : 54)
+                                    .overlay(alignment: .topLeading) {
+                                        Capsule().fill(line).frame(width: name == "表" ? 120 : 150, height: 8).padding(10)
+                                    }
+                            }
+                        }
+                    }
+                }
+                .padding(18)
+            }
+            .overlay(alignment: .bottomTrailing) {
+                Image(systemName: "pencil")
+                    .font(.title3.weight(.semibold)).foregroundStyle(.white)
+                    .frame(width: 48, height: 48)
+                    .background(color, in: Circle())
+                    .shadow(color: color.opacity(0.4), radius: 10, y: 4)
+                    .offset(x: 10, y: 10)
+            }
+            .padding(.horizontal, 24)
+    }
+
+    /// 5: 端末とクラウド
+    private var sync: some View {
+        HStack(spacing: 14) {
+            device(icon: "iphone", label: "iPhone")
+            arrows
+            Image(systemName: "icloud.fill")
+                .font(.system(size: 52)).foregroundStyle(color)
+                .shadow(color: color.opacity(0.4), radius: 14, y: 6)
+            arrows
+            device(icon: "laptopcomputer", label: "Mac など")
+        }
+    }
+    private var arrows: some View {
+        VStack(spacing: 6) {
+            Image(systemName: "arrow.right").font(.caption.weight(.bold))
+            Image(systemName: "arrow.left").font(.caption.weight(.bold))
+        }
+        .foregroundStyle(.secondary)
+    }
+    private func device(icon: String, label: String) -> some View {
+        VStack(spacing: 8) {
+            Image(systemName: icon).font(.system(size: 44)).foregroundStyle(.primary)
+            Text(label).font(.caption).foregroundStyle(.secondary)
+        }
+        .frame(width: 84)
     }
 }
 
 // MARK: - 起動画面 (同期フォルダの確認中)
 
 struct LaunchSplash: View {
+    /// 同梱のアイコン画像 (アセットカタログでなく素のファイルなので、パスから読む)
+    static let appIconImage: UIImage = {
+        if let path = Bundle.main.path(forResource: "CarrelIcon", ofType: "png"), let img = UIImage(contentsOfFile: path) { return img }
+        return UIImage(systemName: "c.circle.fill") ?? UIImage()
+    }()
     var body: some View {
         ZStack {
             Color(.systemBackground).ignoresSafeArea()
             VStack(spacing: 18) {
-                Image("CarrelIcon")
+                Image(uiImage: Self.appIconImage)
                     .resizable().scaledToFit()
                     .frame(width: 120, height: 120)
                     .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
