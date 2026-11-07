@@ -6,6 +6,50 @@ import Combine
 /// 作成・編集の対象。note が nil なら新規
 struct EditTarget: Identifiable { let note: Note?; var id: Int64 { note?.id ?? 0 } }
 
+/// 学習の条件 (カスタム学習デッキ)
+struct StudyOptions: Codable, Identifiable, Equatable {
+    var id = UUID()
+    var name = ""
+    /// 空なら全デッキ
+    var decks: [Int64] = []
+    var tags: [String] = []
+    /// true = 選んだタグを すべて 持つ / false = どれか
+    var tagsAll = false
+    var keyword = ""
+    /// 期限の来ていない復習カードも含める
+    var includeNotDue = false
+    var includeSuspended = false
+    /// 新規カードの上限 (-1 で無制限)
+    var newLimit = 20
+    var newFirst = false
+    var random = false
+    /// 全体の上限 (0 で無制限)
+    var limit = 0
+
+    var summary: String {
+        var p: [String] = []
+        p.append(decks.isEmpty ? "すべてのデッキ" : "\(decks.count) デッキ")
+        if !tags.isEmpty { p.append("タグ \(tags.count)") }
+        if !keyword.isEmpty { p.append("「\(keyword)」") }
+        if includeNotDue { p.append("期限前も") }
+        if random { p.append("ランダム") }
+        return p.joined(separator: " · ")
+    }
+
+    func save(_ key: String) { if let d = try? JSONEncoder().encode(self) { UserDefaults.standard.set(d, forKey: key) } }
+    static func load(_ key: String) -> StudyOptions? {
+        guard let d = UserDefaults.standard.data(forKey: key) else { return nil }
+        return try? JSONDecoder().decode(StudyOptions.self, from: d)
+    }
+    static func loadList(_ key: String) -> [StudyOptions] {
+        guard let d = UserDefaults.standard.data(forKey: key) else { return [] }
+        return (try? JSONDecoder().decode([StudyOptions].self, from: d)) ?? []
+    }
+    static func saveList(_ list: [StudyOptions], _ key: String) {
+        if let d = try? JSONEncoder().encode(list) { UserDefaults.standard.set(d, forKey: key) }
+    }
+}
+
 struct SearchQuery {
     var terms: [String] = []
     var excluded: [String] = []
@@ -103,6 +147,8 @@ final class Store: ObservableObject {
     @AppStorage("showDueInList") var showDueInList: Bool = true
     /// 見た目: system / light / dark
     @AppStorage("appearance") var appearance: String = "system"
+    /// カード編集の標準モード: text / html
+    @AppStorage("editorMode") var editorMode: String = "text"
 
     /// 取り込んだコレクションの置き場所 (アプリの中)
     static var dataDir: URL {
@@ -274,13 +320,40 @@ final class Store: ObservableObject {
 
     // ---- 学習 ----
 
-    /// いま学習すべきカード (期限の来た復習・学習中 → 新規の順)。deck が nil なら全デッキ
-    func studyQueue(deck: Int64?, newLimit: Int = 20) -> [CardInfo] {
-        let all = cards.values.flatMap { $0 }.filter { deck == nil || $0.deckId == deck! }
-        let due = all.filter { $0.queue != 0 && Scheduler.isDue($0, crt: crt) }.sorted { $0.due < $1.due }
-        let fresh = all.filter { $0.queue == 0 }.sorted { $0.due < $1.due }.prefix(newLimit)
-        return due + fresh
+    /// 学習の条件に合うカード。期限の来た復習・学習中 → 新規の順 (ランダム指定なら混ぜる)
+    func studyQueue(_ o: StudyOptions) -> [CardInfo] {
+        let tagSet = Set(o.tags)
+        var all = cards.values.flatMap { $0 }
+        if !o.decks.isEmpty { all = all.filter { o.decks.contains($0.deckId) } }
+        if !tagSet.isEmpty {
+            let okNotes = Set(notes.filter { n in o.tagsAll ? tagSet.isSubset(of: Set(n.tags)) : !tagSet.isDisjoint(with: n.tags) }.map(\.id))
+            all = all.filter { okNotes.contains($0.noteId) }
+        }
+        if !o.keyword.trimmingCharacters(in: .whitespaces).isEmpty {
+            let q = SearchQuery.parse(o.keyword)
+            let okNotes = Set(notes.filter { matches($0, q) }.map(\.id))
+            all = all.filter { okNotes.contains($0.noteId) }
+        }
+        if !o.includeSuspended { all = all.filter { $0.queue >= 0 } }
+        var review = all.filter { $0.queue != 0 && $0.queue >= 0 }
+        if !o.includeNotDue { review = review.filter { Scheduler.isDue($0, crt: crt) } }
+        review.sort { $0.due < $1.due }
+        var fresh = all.filter { $0.queue == 0 }.sorted { $0.due < $1.due }
+        if o.newLimit >= 0 { fresh = Array(fresh.prefix(o.newLimit)) }
+        var out = o.newFirst ? fresh + review : review + fresh
+        if o.random { out.shuffle() }
+        if o.limit > 0 { out = Array(out.prefix(o.limit)) }
+        return out
     }
+
+    /// 学習の条件 (前回のものを覚える) と、名前を付けて保存した条件
+    @Published var studyOptions: StudyOptions = StudyOptions.load("studyOptions") ?? StudyOptions() {
+        didSet { studyOptions.save("studyOptions") }
+    }
+    @Published var studyPresets: [StudyOptions] = StudyOptions.loadList("studyPresets") {
+        didSet { StudyOptions.saveList(studyPresets, "studyPresets") }
+    }
+    @Published var studySetup = false
 
     /// 答えを付けて記録する。次の状態のカードを返す
     @discardableResult

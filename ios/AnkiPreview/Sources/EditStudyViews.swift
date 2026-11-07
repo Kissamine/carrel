@@ -11,10 +11,35 @@ struct NoteEditorView: View {
     @State private var notetypeId: Int64 = 0
     @State private var deckId: Int64 = 0
     @State private var fields: [String] = []
+    /// 開いたときの本文 (変えていない欄は元の HTML のまま保存する)
+    @State private var original: [String] = []
     @State private var tagText = ""
+    /// text = 文章として編集 (改行はそのまま) / html = HTML をそのまま編集
+    @State private var mode = "text"
     @FocusState private var focusedField: Int?
 
     private var notetype: Notetype? { store.notetypes[notetypeId] }
+
+    /// HTML → 文章 (改行タグは改行に、ほかのタグは外す)
+    static func toText(_ html: String) -> String {
+        var t = html
+        for tag in ["<br>", "<br/>", "<br />", "</div>", "</p>", "</li>"] { t = t.replacingOccurrences(of: tag, with: "\n", options: .caseInsensitive) }
+        t = Note.stripHTML(t)
+        while t.hasSuffix("\n") { t.removeLast() }
+        return t
+    }
+    /// 文章 → HTML (記号を逃がして、改行は <br>)
+    static func toHTML(_ text: String) -> String {
+        text.replacingOccurrences(of: "&", with: "&amp;")
+            .replacingOccurrences(of: "<", with: "&lt;")
+            .replacingOccurrences(of: ">", with: "&gt;")
+            .replacingOccurrences(of: "\n", with: "<br>")
+    }
+    /// 書式や画像など、文章にすると失われるものを含むか
+    static func hasRichHTML(_ html: String) -> Bool {
+        let simple = html.replacingOccurrences(of: "<br\\s*/?>|</?div>|</?p>|</?li>|</?ul>|</?ol>", with: "", options: [.regularExpression, .caseInsensitive])
+        return simple.contains("<")
+    }
 
     var body: some View {
         NavigationStack {
@@ -32,14 +57,26 @@ struct NoteEditorView: View {
                         ForEach(store.decks) { d in Text(d.name).tag(d.id) }
                     }
                 }
+                Section {
+                    Picker("編集モード", selection: $mode) {
+                        Text("テキスト").tag("text")
+                        Text("HTML").tag("html")
+                    }
+                    .pickerStyle(.segmented)
+                    .onChange(of: mode) { old, new in switchMode(from: old, to: new) }
+                }
                 if let nt = notetype {
                     ForEach(Array(nt.fieldNames.enumerated()), id: \.offset) { i, name in
-                        Section(name) {
+                        Section {
                             TextEditor(text: Binding(get: { i < fields.count ? fields[i] : "" }, set: { if i < fields.count { fields[i] = $0 } }))
                                 .frame(minHeight: i == 0 ? 60 : 90)
-                                .font(.body)
+                                .font(mode == "html" ? .system(.footnote, design: .monospaced) : .body)
                                 .autocorrectionDisabled()
                                 .focused($focusedField, equals: i)
+                        } header: { Text(name) } footer: {
+                            if mode == "text", i < original.count, Self.hasRichHTML(original[i]) {
+                                Text("この欄には書式や画像が含まれます。テキストモードで書き換えると書式は失われます (HTML モードならそのまま直せます)")
+                            }
                         }
                     }
                 }
@@ -71,14 +108,32 @@ struct NoteEditorView: View {
             notetypeId = note.notetypeId
             deckId = store.noteDecks[note.id] ?? store.decks.first?.id ?? 1
             fields = note.fields
+            original = note.fields
             tagText = note.tags.joined(separator: " ")
         } else {
             notetypeId = store.notetypes.values.sorted { $0.name < $1.name }.first?.id ?? 0
             if let sel = store.selectedNote { notetypeId = sel.notetypeId; deckId = store.noteDecks[sel.id] ?? 0 }
             if deckId == 0 { deckId = store.selectedDeck ?? store.decks.first?.id ?? 1 }
             resizeFields()
+            original = fields
             tagText = store.selectedTags.joined(separator: " ")
             focusedField = 0
+        }
+        mode = store.editorMode == "html" ? "html" : "text"
+        if mode == "text" { fields = fields.map(Self.toText) }
+    }
+
+    /// モードの切り替え: HTML → 文章 / 文章 → HTML に本文を変換する
+    private func switchMode(from old: String, to new: String) {
+        guard old != new else { return }
+        if new == "text" {
+            fields = fields.map(Self.toText)
+        } else {
+            // 文章モードで変えていない欄は元の HTML に戻す (書式を失わないため)
+            fields = fields.enumerated().map { i, t in
+                if i < original.count, Self.toText(original[i]) == t { return original[i] }
+                return Self.toHTML(t)
+            }
         }
     }
 
@@ -89,8 +144,11 @@ struct NoteEditorView: View {
     }
 
     private func save() {
-        // 改行は Anki と同じく <br> にする (HTML をそのまま書いた行はそのまま)
-        let body = fields.map { $0.contains("<") ? $0 : $0.replacingOccurrences(of: "\n", with: "<br>") }
+        // テキストモード: 変えていない欄は元の HTML のまま、変えた欄だけ文章 → HTML に
+        let body: [String] = mode == "html" ? fields : fields.enumerated().map { i, t in
+            if i < original.count, Self.toText(original[i]) == t { return original[i] }
+            return Self.toHTML(t)
+        }
         let tags = tagText.split(whereSeparator: { $0 == " " || $0 == "　" }).map(String.init)
         if let note { store.updateNote(note, fields: body, tags: tags) }
         else { store.addNote(notetypeId: notetypeId, deckId: deckId, fields: body, tags: tags) }
@@ -104,7 +162,7 @@ struct StudyView: View {
     @EnvironmentObject var store: Store
     @Environment(\.dismiss) var dismiss
     @Environment(\.colorScheme) var scheme
-    let deck: Int64?
+    let options: StudyOptions
 
     @State private var queue: [CardInfo] = []
     @State private var showBack = false
@@ -148,14 +206,13 @@ struct StudyView: View {
                     ToolbarItem(placement: .topBarTrailing) {
                         Menu {
                             Button { showBack.toggle() } label: { Label(showBack ? "表を見る" : "答えを見る", systemImage: "rectangle.portrait") }
-                            Button { skip() } label: { Label("あとで", systemImage: "arrow.uturn.forward") }
                             Divider()
                             Button(role: .destructive) { suspend(card) } label: { Label("このカードを停止", systemImage: "pause.circle") }
                         } label: { Image(systemName: "ellipsis.circle") }
                     }
                 }
             }
-            .onAppear { queue = store.studyQueue(deck: deck); shownAt = Date() }
+            .onAppear { queue = store.studyQueue(options); shownAt = Date() }
         }
     }
 
@@ -164,6 +221,15 @@ struct StudyView: View {
     private func answerBar(_ card: CardInfo) -> some View {
         HStack(spacing: 10) {
             if !showBack {
+                // あとで (列の最後に回す) / スキップ (今回は出さない) / 答えを見る
+                Button { skip() } label: {
+                    VStack(spacing: 2) { Image(systemName: "arrow.uturn.forward"); Text("あとで").font(.caption2) }.frame(width: 56).padding(.vertical, 4)
+                }
+                .buttonStyle(.glass)
+                Button { dropCurrent() } label: {
+                    VStack(spacing: 2) { Image(systemName: "forward.end"); Text("スキップ").font(.caption2) }.frame(width: 56).padding(.vertical, 4)
+                }
+                .buttonStyle(.glass)
                 Button { showBack = true } label: {
                     Text("答えを見る").font(.headline).frame(maxWidth: .infinity).padding(.vertical, 6)
                 }
@@ -205,11 +271,121 @@ struct StudyView: View {
         showBack = false; shownAt = Date()
     }
 
+    /// 今回の学習からは外す (記録はしない)
+    private func dropCurrent() {
+        guard !queue.isEmpty else { return }
+        queue.removeFirst()
+        showBack = false; shownAt = Date()
+    }
+
     private func suspend(_ card: CardInfo) {
         var c = card; c.queue = -1
         store.setCardQueue(c)
         queue.removeFirst()
         showBack = false; shownAt = Date()
+    }
+}
+
+// MARK: - 学習の条件 (カスタム学習デッキ)
+
+struct StudySetupView: View {
+    @EnvironmentObject var store: Store
+    @Environment(\.dismiss) var dismiss
+    @State private var o = StudyOptions()
+    @State private var presetName = ""
+    @State private var showSave = false
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                if !store.studyPresets.isEmpty {
+                    Section("保存した学習デッキ") {
+                        ForEach(store.studyPresets) { p in
+                            Button {
+                                o = p
+                            } label: {
+                                HStack {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(p.name).foregroundStyle(.primary)
+                                        Text(p.summary).font(.caption).foregroundStyle(.secondary)
+                                    }
+                                    Spacer()
+                                    Text("\(store.studyQueue(p).count) 枚").font(.footnote).foregroundStyle(.secondary)
+                                    if o.id == p.id { Image(systemName: "checkmark").foregroundStyle(Color.accentColor) }
+                                }
+                            }
+                        }
+                        .onDelete { idx in store.studyPresets.remove(atOffsets: idx) }
+                    }
+                }
+                Section("デッキ") {
+                    Toggle("すべてのデッキ", isOn: Binding(get: { o.decks.isEmpty }, set: { if $0 { o.decks = [] } else if let d = store.decks.first { o.decks = [d.id] } }))
+                    if !o.decks.isEmpty {
+                        ForEach(store.decks) { d in
+                            Toggle(d.name, isOn: Binding(get: { o.decks.contains(d.id) }, set: { on in
+                                if on { o.decks.append(d.id) } else { o.decks.removeAll { $0 == d.id }; if o.decks.isEmpty { o.decks = [d.id] } }
+                            }))
+                        }
+                    }
+                }
+                Section {
+                    ForEach(store.allTags.prefix(40), id: \.0) { tag, count in
+                        Toggle("\(tag)  \(count)", isOn: Binding(get: { o.tags.contains(tag) }, set: { on in
+                            if on { o.tags.append(tag) } else { o.tags.removeAll { $0 == tag } }
+                        }))
+                    }
+                    if o.tags.count > 1 {
+                        Picker("複数のタグ", selection: $o.tagsAll) {
+                            Text("どれかを持つ").tag(false)
+                            Text("すべてを持つ").tag(true)
+                        }
+                    }
+                } header: { Text("タグ") } footer: { Text("選ばなければタグでは絞りません") }
+                Section("そのほかの条件") {
+                    TextField("検索語 (一覧の検索と同じ書き方)", text: $o.keyword).autocorrectionDisabled()
+                    Toggle("期限の来ていないカードも含める", isOn: $o.includeNotDue)
+                    Toggle("停止中のカードも含める", isOn: $o.includeSuspended)
+                    Stepper(o.newLimit < 0 ? "新規カード: 無制限" : "新規カード: \(o.newLimit) 枚まで", value: $o.newLimit, in: -1...200, step: 5)
+                    Toggle("新規カードを先に", isOn: $o.newFirst)
+                    Toggle("ランダムな順で", isOn: $o.random)
+                    Stepper(o.limit == 0 ? "枚数の上限: なし" : "枚数の上限: \(o.limit) 枚", value: $o.limit, in: 0...500, step: 10)
+                }
+                Section {
+                    Button { showSave = true } label: { Label(o.name.isEmpty ? "この条件を学習デッキとして保存…" : "「\(o.name)」を更新・別名で保存…", systemImage: "square.and.arrow.down") }
+                }
+            }
+            .navigationTitle("学習")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("キャンセル") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    let n = store.studyQueue(o).count
+                    Button("開始 (\(n))") { start() }.fontWeight(.semibold).disabled(n == 0)
+                }
+            }
+            .alert("学習デッキの名前", isPresented: $showSave) {
+                TextField("名前", text: $presetName)
+                Button("保存") {
+                    var p = o; p.name = presetName.trimmingCharacters(in: .whitespaces)
+                    guard !p.name.isEmpty else { return }
+                    if let i = store.studyPresets.firstIndex(where: { $0.id == p.id }) { store.studyPresets[i] = p } else { p.id = UUID(); store.studyPresets.append(p) }
+                    o = p
+                }
+                Button("キャンセル", role: .cancel) {}
+            }
+            .onAppear {
+                o = store.studyOptions
+                // 一覧でデッキを絞っていれば、それを初期値に
+                if let d = store.selectedDeck, o.decks.isEmpty, o.name.isEmpty { o.decks = [d] }
+                presetName = o.name
+            }
+        }
+    }
+
+    private func start() {
+        store.studyOptions = o
+        dismiss()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { store.studying = true }
     }
 }
 
@@ -224,7 +400,7 @@ struct GuideView: View {
                 Section("Carrel でできること") {
                     guide("カードを見る", "一覧からカードを選ぶと右 (または次の画面) に表示されます。右上の「表 / 裏」で面を切り替え、下の矢印で前後のカードへ移れます。")
                     guide("カードを作る・直す", "一覧右上のメニューの「新しいカード」で作れます。表示中のカードは右上メニューの「編集」で本文とタグを、「カード情報」でデッキとタグを変えられます。")
-                    guide("学習する", "一覧の下にある「学習」を押すと、期限の来たカードと未学習のカードが順に出ます。答えを見てから「もう一度 / 難しい / 普通 / 簡単」で評価すると、Anki と同じ考え方で次の出題日が決まります。")
+                    guide("学習する", "一覧の下にある「学習」を押すと条件の画面が開き、デッキ・タグ・検索語・新規の枚数などを選べます。よく使う条件は名前を付けて学習デッキとして保存できます。学習中は「あとで」(列の最後へ) と「スキップ」(今回は出さない) も使えます。答えを見てから「もう一度 / 難しい / 普通 / 簡単」で評価すると、Anki と同じ考え方で次の出題日が決まります。")
                 }
                 Section("検索のコツ") {
                     guide("語で絞る", "スペース区切りで入れた語を すべて含む カードに絞り込みます。検索中は関連度の高い順に並びます。")

@@ -16,7 +16,8 @@ struct ContentView: View {
         .navigationSplitViewStyle(.balanced)
         .sheet(isPresented: $showSettings) { SettingsView().environmentObject(store) }
         .sheet(item: $store.editing) { target in NoteEditorView(note: target.note).environmentObject(store) }
-        .fullScreenCover(isPresented: $store.studying) { StudyView(deck: store.selectedDeck).environmentObject(store) }
+        .sheet(isPresented: $store.studySetup) { StudySetupView().environmentObject(store) }
+        .fullScreenCover(isPresented: $store.studying) { StudyView(options: store.studyOptions).environmentObject(store) }
         .sheet(isPresented: $store.showGuide) { GuideView() }
         // 起動直後、同期フォルダの確認中はアイコンの起動画面
         .overlay { if store.checking && store.notes.isEmpty { LaunchSplash().transition(.opacity) } }
@@ -435,7 +436,7 @@ struct NoteListView: View {
             }
             Divider()
             Button { store.editing = EditTarget(note: nil) } label: { Label("新しいカード", systemImage: "plus") }
-            Button { store.studying = true } label: { Label("学習を始める", systemImage: "graduationcap") }
+            Button { store.studySetup = true } label: { Label("学習を始める", systemImage: "graduationcap") }
             Divider()
             Button { store.pickRandom() } label: { Label("ランダムに開く", systemImage: "shuffle") }
             if store.hasActiveFilter {
@@ -507,7 +508,7 @@ struct NoteListView: View {
             }
             // 学習 (期限の来たカード + 未学習)
             ToolbarItem(placement: .bottomBar) {
-                Button { store.studying = true } label: { Image(systemName: "graduationcap") }
+                Button { store.studySetup = true } label: { Image(systemName: "graduationcap") }
                     .disabled(!store.hasCollection)
             }
             ToolbarItem(placement: .status) {
@@ -757,8 +758,12 @@ struct SettingsView: View {
                         Text("表面").tag("front")
                         Text("裏面").tag("back")
                     }
-                } header: { Text("プレビュー") } footer: {
-                    Text("カードを開いたときに最初に出す面です。右上の「表 / 裏」でいつでも切り替えられます。学習では常に表面から始まります。")
+                    Picker("編集モードの標準", selection: $store.editorMode) {
+                        Text("テキスト").tag("text")
+                        Text("HTML").tag("html")
+                    }
+                } header: { Text("プレビューと編集") } footer: {
+                    Text("「最初に見せる面」はカードを開いたときに出す面で、右上の「表 / 裏」でいつでも切り替えられます (学習では常に表面から)。編集モードはカードを編集するときの初期モードで、編集画面でも切り替えられます。テキストモードは文章として直し、HTML モードはタグをそのまま直します。")
                 }
             }
             .navigationTitle("設定")
