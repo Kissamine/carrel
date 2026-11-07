@@ -296,14 +296,16 @@ struct LightboxView: View {
             } else {
                 ContentUnavailableView("画像を開けません", systemImage: "photo").foregroundStyle(.white)
             }
-            HStack(spacing: 12) {
-                ShareLink(item: url) { Image(systemName: "square.and.arrow.up") }
-                Button { dismiss() } label: { Image(systemName: "xmark") }
+            // 共有と閉じるは Liquid Glass のボタンで
+            HStack(spacing: 10) {
+                ShareLink(item: url) { Image(systemName: "square.and.arrow.up").frame(width: 24, height: 24) }
+                    .buttonStyle(.glass)
+                Button { dismiss() } label: { Image(systemName: "xmark").frame(width: 24, height: 24) }
+                    .buttonStyle(.glass)
             }
             .font(.title3.weight(.semibold))
             .foregroundStyle(.white)
-            .padding(12)
-            .background(.black.opacity(0.45), in: Capsule())
+            .colorScheme(.dark)
             .padding()
         }
         .statusBarHidden()
