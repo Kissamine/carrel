@@ -17,6 +17,8 @@ struct NoteEditorView: View {
     @State private var newTag = ""
     /// text = 文章として編集 (改行はそのまま) / html = HTML をそのまま編集
     @State private var mode = "text"
+    /// 初期化が終わるまでモード切り替えの変換はしない (標準が HTML のとき、開いた直後の切り替えでタグが逃がされてしまうため)
+    @State private var ready = false
     @FocusState private var focusedField: Int?
 
     private var notetype: Notetype? { store.notetypes[notetypeId] }
@@ -64,7 +66,7 @@ struct NoteEditorView: View {
                         Text("HTML").tag("html")
                     }
                     .pickerStyle(.segmented)
-                    .onChange(of: mode) { old, new in switchMode(from: old, to: new) }
+                    .onChange(of: mode) { old, new in if ready { switchMode(from: old, to: new) } }
                 }
                 if let nt = notetype {
                     ForEach(Array(nt.fieldNames.enumerated()), id: \.offset) { i, name in
@@ -142,6 +144,7 @@ struct NoteEditorView: View {
         }
         mode = store.editorMode == "html" ? "html" : "text"
         if mode == "text" { fields = fields.map(Self.toText) }
+        DispatchQueue.main.async { ready = true }
     }
 
     /// モードの切り替え: HTML → 文章 / 文章 → HTML に本文を変換する
