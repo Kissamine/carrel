@@ -276,7 +276,7 @@ struct StudyView: View {
                 ForEach(Scheduler.Ease.allCases, id: \.rawValue) { ease in
                     Button { answer(card, ease) } label: {
                         VStack(spacing: 2) {
-                            Text(ease.label).font(.subheadline.weight(.semibold))
+                            Text(ease.label).font(.title2.weight(.semibold))
                             Text(Scheduler.preview(card, ease: ease, crt: store.crt)).font(.caption2).opacity(0.8)
                         }
                         .frame(maxWidth: .infinity).padding(.vertical, 4)

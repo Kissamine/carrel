@@ -13,7 +13,7 @@ enum Scheduler {
     static let minFactor = 1300
 
     enum Ease: Int, CaseIterable { case again = 1, hard = 2, good = 3, easy = 4
-        var label: String { switch self { case .again: "もう一度"; case .hard: "難しい"; case .good: "普通"; case .easy: "簡単" } }
+        var label: String { switch self { case .again: "×"; case .hard: "△"; case .good: "○"; case .easy: "◎" } }
     }
 
     /// 復習の記録に書く種類: 0 学習 / 1 復習 / 2 再学習
