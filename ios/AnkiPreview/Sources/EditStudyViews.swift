@@ -286,7 +286,7 @@ struct StudyView: View {
                     }
                     .buttonStyle(.glass)
                     // 長押しで次の間隔 ("10分" "4日" など)
-                    .simultaneousGesture(LongPressGesture(minimumDuration: 0.35).onEnded { _ in showTip(Scheduler.preview(card, ease: ease, crt: store.crt)) })
+                    .simultaneousGesture(LongPressGesture(minimumDuration: 0.35).onEnded { _ in showTip("\(ease.name)：\(Scheduler.preview(card, ease: ease, crt: store.crt))後") })
                 }
             }
         }
