@@ -499,13 +499,6 @@ struct SettingsView: View {
                         Text("\(Int(store.textZoom * 100))%").monospacedDigit().frame(width: 48, alignment: .trailing)
                     }
                 }
-                Section {
-                    Picker("アプリアイコン", selection: $store.appIcon) {
-                        Text("標準").tag("")
-                        Text("水色").tag("CarrelBlue")
-                    }
-                    .onChange(of: store.appIcon) { _, name in store.applyAppIcon(name) }
-                } header: { Text("アイコン") }
                 Section("一覧") {
                     Toggle("タグを表示", isOn: $store.showTagsInList)
                     Toggle("期限を表示", isOn: $store.showDueInList)

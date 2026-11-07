@@ -84,16 +84,6 @@ final class Store: ObservableObject {
     @AppStorage("showDueInList") var showDueInList: Bool = true
     /// 見た目: system / light / dark
     @AppStorage("appearance") var appearance: String = "system"
-    /// アプリアイコン: "" = 標準 (テーマ追従) / "CarrelSea" = 水色
-    @AppStorage("appIcon") var appIcon: String = ""
-
-    func applyAppIcon(_ name: String) {
-        let target: String? = name.isEmpty ? nil : name
-        guard UIApplication.shared.supportsAlternateIcons, UIApplication.shared.alternateIconName != target else { return }
-        UIApplication.shared.setAlternateIconName(target) { err in
-            if let err { Task { @MainActor in self.error = "アイコンを変えられません: \(err.localizedDescription)" } }
-        }
-    }
 
     /// 取り込んだコレクションの置き場所 (アプリの中)
     static var dataDir: URL {
