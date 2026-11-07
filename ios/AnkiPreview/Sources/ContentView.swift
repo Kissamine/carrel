@@ -523,9 +523,9 @@ struct NoteListView: View {
     private func chip(_ text: String, on: Bool, icon: String?) -> some View {
         HStack(spacing: 4) {
             if let icon { Image(systemName: icon).font(.caption) }
-            Text(text).font(.footnote)
+            Text(text).font(.subheadline)
         }
-        .padding(.horizontal, 10).padding(.vertical, 6)
+        .padding(.horizontal, 12).padding(.vertical, 7)
         .background(on ? Color.accentColor.opacity(0.22) : Color(.secondarySystemFill), in: Capsule())
         .foregroundStyle(on ? Color.accentColor : .primary)
     }
@@ -545,7 +545,7 @@ struct NoteRow: View {
                 let lines = note.titleLines
                 // macOS 版と同じく、見出しの 3 行は同じ大きさ・同じ色で
                 ForEach(Array(lines.enumerated()), id: \.offset) { i, line in
-                    Text(line).font(.headline).lineLimit(i == 0 ? 2 : 1)
+                    Text(line).font(.system(size: 16, weight: .semibold)).lineLimit(i == 0 ? 2 : 1)
                 }
                 if let snip = snippet {
                     Text(snip).font(.caption).foregroundStyle(.secondary).lineLimit(2)
