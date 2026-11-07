@@ -210,8 +210,15 @@ struct StudyView: View {
                         PreviewView(html: store.studyHTML(card: card, back: showBack, dark: dark), mediaDir: Store.mediaDir,
                                     highlights: [], controller: preview,
                                     onImage: { url in store.lightbox = LightboxItem(url: url) })
-                            .padding(.top, -10)   // カウンターとカードの間を少し詰める
                         answerBar(card)
+                    }
+                    // カウンター (プレビューの「1 / 114」と同じ見た目)。スクロールしても動かないよう、カードの上に重ねて固定
+                    .overlay(alignment: .top) {
+                        Text("\(min(done + 1, total)) / \(total)")
+                            .font(.footnote).monospacedDigit().foregroundStyle(.secondary).fixedSize()
+                            .padding(.horizontal, 14).padding(.vertical, 8)
+                            .glassEffect(.regular, in: Capsule())
+                            .padding(.top, 4)
                     }
                     .background(bg)
                     .toolbarBackground(bg, for: .navigationBar)
@@ -231,15 +238,7 @@ struct StudyView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button { dismiss() } label: { Image(systemName: "xmark") } }
-                if current != nil {
-                    // プレビューの「1 / 114」と同じ見た目
-                    ToolbarItem(placement: .principal) {
-                        Text("\(min(done + 1, total)) / \(total)")
-                            .font(.footnote).monospacedDigit().foregroundStyle(.secondary).fixedSize()
-                            .padding(.horizontal, 14).padding(.vertical, 8)
-                            .glassEffect(.regular, in: Capsule())
-                    }
-                }
+
                 if let card = current {
                     ToolbarItem(placement: .topBarTrailing) {
                         Menu {
@@ -272,7 +271,7 @@ struct StudyView: View {
                     Text("答えを見る").font(.headline).frame(maxWidth: .infinity).padding(.vertical, 6)
                 }
                 .buttonStyle(.glassProminent)
-                .tint(Color.carrelBlue)   // テーマの水色 (宮古島ブルー) の Liquid Glass
+                .tint(Color.carrelBlueDeep)   // テーマの水色 (宮古島ブルー) の Liquid Glass
             } else {
                 ForEach(Scheduler.Ease.allCases, id: \.rawValue) { ease in
                     Button { answer(card, ease) } label: {

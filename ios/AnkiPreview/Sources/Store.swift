@@ -777,6 +777,8 @@ final class Store: ObservableObject {
 extension Color {
     /// Carrel のテーマカラー (アイコンの水色のグラデーションの明るい側)
     static let carrelBlue = Color(.displayP3, red: 0.21176, green: 0.79608, blue: 0.89412)
+    /// 同じグラデーションの少し深い側 (ボタンの地に)
+    static let carrelBlueDeep = Color(.displayP3, red: 0.10, green: 0.60, blue: 0.84)
 
     init?(hex: String) {
         var h = hex.trimmingCharacters(in: .whitespaces); h.removeFirst()
