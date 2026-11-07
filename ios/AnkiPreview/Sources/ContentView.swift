@@ -742,10 +742,6 @@ struct SettingsView: View {
                         Text("ライト").tag("light")
                         Text("ダーク").tag("dark")
                     }
-                    Picker("最初に見せる面", selection: $store.side) {
-                        Text("表面").tag("front")
-                        Text("裏面").tag("back")
-                    }
                     HStack {
                         Text("文字の大きさ")
                         Slider(value: $store.textZoom, in: 0.7...1.8, step: 0.05)
@@ -755,6 +751,14 @@ struct SettingsView: View {
                 Section("一覧") {
                     Toggle("タグを表示", isOn: $store.showTagsInList)
                     Toggle("期限を表示", isOn: $store.showDueInList)
+                }
+                Section {
+                    Picker("最初に見せる面", selection: $store.side) {
+                        Text("表面").tag("front")
+                        Text("裏面").tag("back")
+                    }
+                } header: { Text("プレビュー") } footer: {
+                    Text("カードを開いたときに最初に出す面です。右上の「表 / 裏」でいつでも切り替えられます。学習では常に表面から始まります。")
                 }
             }
             .navigationTitle("設定")
