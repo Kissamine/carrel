@@ -260,11 +260,11 @@ struct StudyView: View {
             if !showBack {
                 // あとで (列の最後に回す) / スキップ (今回は出さない) / 答えを見る
                 Button { skip() } label: {
-                    VStack(spacing: 2) { Image(systemName: "arrow.uturn.forward"); Text("あとで").font(.caption2) }.frame(width: 56).padding(.vertical, 4)
+                    Image(systemName: "arrow.uturn.forward").font(.title3).frame(width: 56).padding(.vertical, 10)
                 }
                 .buttonStyle(.glass)
                 Button { dropCurrent() } label: {
-                    VStack(spacing: 2) { Image(systemName: "forward.end"); Text("スキップ").font(.caption2) }.frame(width: 56).padding(.vertical, 4)
+                    Image(systemName: "forward.end").font(.title3).frame(width: 56).padding(.vertical, 10)
                 }
                 .buttonStyle(.glass)
                 Button { showBack = true } label: {
