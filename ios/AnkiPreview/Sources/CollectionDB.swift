@@ -233,6 +233,26 @@ final class CollectionDB {
         try exec("delete from notes where id = \(id)")
     }
 
+    /// 同梱のサンプル (別の .anki2) のノートを、このコレクションに足す。
+    /// デッキ・ノートタイプ (欄・カードタイプ) ・ノート・カードの行をそのまま写す。id が重なるものは写さない。
+    /// ノートタイプの名前がすでにあるときは「(サンプル)」を付けて別物として入れる
+    func importSample(from path: String) throws -> Int {
+        try exec("attach database \(Self.quote(path)) as s")
+        defer { try? exec("detach database s") }
+        let mids = "select mid from s.notes"
+        try exec("insert or ignore into decks (id, name, mtime_secs, usn, common, kind) select id, name, mtime_secs, -1, common, kind from s.decks where id != 1 and name not in (select name from decks)")
+        try exec("insert or ignore into notetypes (id, name, mtime_secs, usn, config) select id, case when name in (select name from notetypes) then name || ' (サンプル)' else name end, mtime_secs, -1, config from s.notetypes where id in (\(mids))")
+        try exec("insert or ignore into fields (ntid, ord, name, config) select ntid, ord, name, config from s.fields where ntid in (\(mids))")
+        try exec("insert or ignore into templates (ntid, ord, name, mtime_secs, usn, config) select ntid, ord, name, mtime_secs, -1, config from s.templates where ntid in (\(mids))")
+        var before = 0, after = 0
+        try query("select count(*) from notes") { st in before = Int(sqlite3_column_int(st, 0)) }
+        try exec("insert or ignore into notes (id, guid, mid, mod, usn, tags, flds, sfld, csum, flags, data) select id, guid, mid, \(Self.now()), -1, tags, flds, sfld, csum, flags, data from s.notes")
+        // カードのデッキは、同名のデッキがすでにあるならそちらへ
+        try exec("insert or ignore into cards (id, nid, did, ord, mod, usn, type, queue, due, ivl, factor, reps, lapses, left, odue, odid, flags, data) select c.id, c.nid, coalesce((select d2.id from decks d2 join s.decks d1 on d1.name = d2.name where d1.id = c.did), c.did), c.ord, \(Self.now()), -1, c.type, c.queue, c.due, c.ivl, c.factor, c.reps, c.lapses, c.left, c.odue, c.odid, c.flags, c.data from s.cards c where c.nid in (select id from s.notes)")
+        try query("select count(*) from notes") { st in after = Int(sqlite3_column_int(st, 0)) }
+        return after - before
+    }
+
     /// 一貫した形で別の場所へ写す (WAL の内容も含めて)
     func backup(to dest: URL) throws {
         var out: OpaquePointer?

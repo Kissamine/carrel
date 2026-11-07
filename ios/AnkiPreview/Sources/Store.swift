@@ -171,6 +171,16 @@ final class Store: ObservableObject {
         Task { await load() }
     }
 
+    /// 同梱のサンプルカードを、いまのコレクションに足す (すでにあるものは足さない)
+    func addSampleCards() async {
+        guard let sample = Bundle.main.url(forResource: "sample", withExtension: "anki2") else { return }
+        var added = 0
+        guard write({ db in added = try db.importSample(from: sample.path) }) else { return }
+        await load()
+        if added == 0 { error = "サンプルのカードはすでに入っています (「サンプル」で検索すると出ます)" }
+        else { keyword = "サンプル" }
+    }
+
     /// チュートリアル (初回は自動で出す。使い方ガイドからいつでも)
     @Published var showTutorial = !UserDefaults.standard.bool(forKey: "tutorialShown") {
         didSet { if showTutorial { UserDefaults.standard.set(true, forKey: "tutorialShown") } }

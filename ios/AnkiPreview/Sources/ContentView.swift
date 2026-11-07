@@ -737,6 +737,8 @@ struct SettingsView: View {
                     LabeledContent("ノート", value: "\(store.notes.count) 件")
                     LabeledContent("今日の期限", value: "\(store.notes.filter { store.isDue($0) }.count) 件")
                     Button { dismiss(); store.showGuide = true } label: { Label("使い方ガイド", systemImage: "questionmark.circle") }
+                    Button { dismiss(); Task { await store.addSampleCards() } } label: { Label("サンプルのカードを追加", systemImage: "sparkles.rectangle.stack") }
+                        .disabled(store.loading)
                 }
                 Section("表示") {
                     Picker("見た目", selection: $store.appearance) {
