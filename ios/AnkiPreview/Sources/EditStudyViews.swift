@@ -196,6 +196,9 @@ struct StudyView: View {
     @State private var shownAt = Date()
     @State private var done = 0
     @State private var total = 0
+    /// 長押しで出す短い説明 (「あとで」「スキップ」)
+    @State private var tip: String? = nil
+    @State private var tipTask: Task<Void, Never>? = nil
     @StateObject private var preview = PreviewController()
 
     private var current: CardInfo? { queue.first }
@@ -263,10 +266,12 @@ struct StudyView: View {
                     Image(systemName: "arrow.uturn.forward").font(.title3).frame(width: 56).padding(.vertical, 10)
                 }
                 .buttonStyle(.glass)
+                .simultaneousGesture(LongPressGesture(minimumDuration: 0.35).onEnded { _ in showTip("あとで (列の最後へ)") })
                 Button { dropCurrent() } label: {
                     Image(systemName: "forward.end").font(.title3).frame(width: 56).padding(.vertical, 10)
                 }
                 .buttonStyle(.glass)
+                .simultaneousGesture(LongPressGesture(minimumDuration: 0.35).onEnded { _ in showTip("スキップ (今回は出さない)") })
                 Button { showBack = true } label: {
                     Text("答えを見る").font(.headline).frame(maxWidth: .infinity).padding(.vertical, 6)
                 }
@@ -284,6 +289,22 @@ struct StudyView: View {
             }
         }
         .padding(.horizontal, 12).padding(.vertical, 10)
+        // 長押しの説明 (ボタンの上に一瞬だけ)
+        .overlay(alignment: .top) {
+            if let tip {
+                Text(tip).font(.footnote).padding(.horizontal, 12).padding(.vertical, 6)
+                    .glassEffect(.regular, in: Capsule())
+                    .offset(y: -40)
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+            }
+        }
+        .animation(.easeOut(duration: 0.2), value: tip)
+    }
+
+    private func showTip(_ text: String) {
+        tipTask?.cancel()
+        tip = text
+        tipTask = Task { try? await Task.sleep(for: .seconds(1.4)); if !Task.isCancelled { tip = nil } }
     }
 
     private func color(for ease: Scheduler.Ease) -> Color {
