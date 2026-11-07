@@ -30,7 +30,7 @@ final class CollectionDB {
 
     deinit { if let db { sqlite3_close(db) } }
 
-    private func query(_ sql: String, _ row: (OpaquePointer) -> Void) throws {
+    func query(_ sql: String, _ row: (OpaquePointer) -> Void) throws {
         var stmt: OpaquePointer?
         guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK, let stmt else {
             throw NSError(domain: "AnkiPreview", code: 2,
@@ -38,6 +38,29 @@ final class CollectionDB {
         }
         defer { sqlite3_finalize(stmt) }
         while sqlite3_step(stmt) == SQLITE_ROW { row(stmt) }
+    }
+
+    /// 束縛つきの書き込み (文字列・整数・バイト列)
+    func run(_ sql: String, _ binds: [Any]) throws {
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK, let stmt else {
+            throw NSError(domain: "AnkiPreview", code: 2, userInfo: [NSLocalizedDescriptionKey: String(cString: sqlite3_errmsg(db))])
+        }
+        defer { sqlite3_finalize(stmt) }
+        let transient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
+        for (i, v) in binds.enumerated() {
+            let idx = Int32(i + 1)
+            switch v {
+            case let s as String: sqlite3_bind_text(stmt, idx, s, -1, transient)
+            case let n as Int64: sqlite3_bind_int64(stmt, idx, n)
+            case let n as Int: sqlite3_bind_int64(stmt, idx, Int64(n))
+            case let d as Data: d.withUnsafeBytes { p in _ = sqlite3_bind_blob(stmt, idx, p.baseAddress, Int32(d.count), transient) }
+            default: sqlite3_bind_null(stmt, idx)
+            }
+        }
+        guard sqlite3_step(stmt) == SQLITE_DONE else {
+            throw NSError(domain: "AnkiPreview", code: 5, userInfo: [NSLocalizedDescriptionKey: String(cString: sqlite3_errmsg(db))])
+        }
     }
 
     /// 書き込み (iPhone 内のコピーに対してだけ使う)
@@ -61,12 +84,12 @@ final class CollectionDB {
         try exec("update cards set did = \(deckId), mod = \(now), usn = -1 where nid = \(noteId)")
     }
 
-    private func text(_ stmt: OpaquePointer, _ col: Int32) -> String {
+    func text(_ stmt: OpaquePointer, _ col: Int32) -> String {
         guard let c = sqlite3_column_text(stmt, col) else { return "" }
         return String(cString: c)
     }
 
-    private func blob(_ stmt: OpaquePointer, _ col: Int32) -> Data {
+    func blob(_ stmt: OpaquePointer, _ col: Int32) -> Data {
         guard let p = sqlite3_column_blob(stmt, col) else { return Data() }
         return Data(bytes: p, count: Int(sqlite3_column_bytes(stmt, col)))
     }
@@ -269,7 +292,7 @@ final class CollectionDB {
     }
 
     /// Anki と同じ: 最初の欄 (HTML を落としたもの) の SHA1 の先頭 8 桁
-    private static func checksum(_ s: String) -> Int64 {
+    static func checksum(_ s: String) -> Int64 {
         let digest = Insecure.SHA1.hash(data: Data(s.utf8))
         let hex = digest.map { String(format: "%02x", $0) }.joined().prefix(8)
         return Int64(hex, radix: 16) ?? 0

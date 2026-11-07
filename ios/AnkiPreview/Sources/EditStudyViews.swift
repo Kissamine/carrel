@@ -48,14 +48,10 @@ struct NoteEditorView: View {
         NavigationStack {
             Form {
                 Section {
-                    if note == nil {
-                        Picker("ノートタイプ", selection: $notetypeId) {
-                            ForEach(store.notetypes.values.sorted { $0.name < $1.name }) { nt in Text(nt.name).tag(nt.id) }
-                        }
-                        .onChange(of: notetypeId) { _, _ in resizeFields() }
-                    } else {
-                        LabeledContent("ノートタイプ", value: notetype?.name ?? "")
+                    Picker("ノートタイプ", selection: $notetypeId) {
+                        ForEach(store.notetypes.values.sorted { $0.name < $1.name }) { nt in Text(nt.name).tag(nt.id) }
                     }
+                    .onChange(of: notetypeId) { old, new in if ready { remapFields(from: old, to: new) } }
                     Picker("デッキ", selection: $deckId) {
                         ForEach(store.decks) { d in Text(d.name).tag(d.id) }
                     }
@@ -167,6 +163,21 @@ struct NoteEditorView: View {
         if fields.count > n { fields = Array(fields.prefix(n)) }
     }
 
+    /// ノートタイプを変えたとき、同じ名前の欄はそのまま、それ以外は位置で写す
+    private func remapFields(from old: Int64, to new: Int64) {
+        guard let oldNT = store.notetypes[old], let newNT = store.notetypes[new] else { resizeFields(); return }
+        let oldFields = fields
+        var used = Set<Int>()
+        fields = newNT.fieldNames.enumerated().map { i, name -> String in
+            if let j = oldNT.fieldNames.firstIndex(of: name), j < oldFields.count { used.insert(j); return oldFields[j] }
+            return ""
+        }
+        // 名前が合わなかった欄は、空いている位置へ順に
+        var leftovers = oldFields.enumerated().filter { !used.contains($0.offset) && !$0.element.isEmpty }.map(\.element)
+        for i in fields.indices where fields[i].isEmpty && !leftovers.isEmpty { fields[i] = leftovers.removeFirst() }
+        original = Array(repeating: "", count: fields.count)   // 元の HTML との対応は切れる
+    }
+
     private func addTypedTag() {
         let t = newTag.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: " ", with: "_")
         guard !t.isEmpty else { return }
@@ -180,8 +191,14 @@ struct NoteEditorView: View {
             if i < original.count, Self.toText(original[i]) == t { return original[i] }
             return Self.toHTML(t)
         }
-        if let note { store.updateNote(note, fields: body, tags: tags) }
-        else { store.addNote(notetypeId: notetypeId, deckId: deckId, fields: body, tags: tags) }
+        if let note {
+            if note.notetypeId != notetypeId {
+                Task { await store.changeNotetype(note, to: notetypeId, fields: body, tags: tags); store.setDeck(note, deckId) }
+            } else {
+                store.updateNote(note, fields: body, tags: tags)
+                if store.noteDecks[note.id] != deckId { store.setDeck(note, deckId) }
+            }
+        } else { store.addNote(notetypeId: notetypeId, deckId: deckId, fields: body, tags: tags) }
         dismiss()
     }
 }
@@ -353,6 +370,101 @@ struct StudyView: View {
         store.setCardQueue(c)
         withAnimation(.easeInOut(duration: 0.3)) { queue.removeFirst(); showBack = false }
         shownAt = Date()
+    }
+}
+
+// MARK: - ノートタイプの編集 (欄・テンプレート・CSS)
+
+struct NotetypeEditorView: View {
+    @EnvironmentObject var store: Store
+    @Environment(\.dismiss) var dismiss
+    let notetypeId: Int64
+    @State private var draft: NotetypeDraft? = nil
+    @State private var templateIndex = 0
+    @State private var newField = ""
+    @State private var confirmSave = false
+
+    var body: some View {
+        Group {
+            if let d = Binding($draft) {
+                Form {
+                    Section("名前") { TextField("ノートタイプの名前", text: d.name) }
+                    Section {
+                        ForEach(d.fields) { f in
+                            TextField("欄の名前", text: f.name)
+                        }
+                        .onMove { from, to in draft?.fields.move(fromOffsets: from, toOffset: to) }
+                        .onDelete { idx in if (draft?.fields.count ?? 0) > 1 { draft?.fields.remove(atOffsets: idx) } }
+                        HStack {
+                            TextField("新しい欄を追加", text: $newField).onSubmit(addField)
+                            if !newField.trimmingCharacters(in: .whitespaces).isEmpty {
+                                Button { addField() } label: { Image(systemName: "plus.circle.fill") }.buttonStyle(.plain)
+                            }
+                        }
+                    } header: {
+                        HStack { Text("欄"); Spacer(); EditButton().font(.footnote) }
+                    } footer: {
+                        Text("並べ替えや削除をすると、このノートタイプの全カードの本文も同じように並べ替わります。削除した欄の内容は消えます。")
+                    }
+                    if d.wrappedValue.templates.count > 1 {
+                        Section {
+                            Picker("カードタイプ", selection: $templateIndex) {
+                                ForEach(Array(d.wrappedValue.templates.enumerated()), id: \.offset) { i, t in Text(t.name).tag(i) }
+                            }
+                        }
+                    }
+                    if templateIndex < d.wrappedValue.templates.count {
+                        let t = d.templates[templateIndex]
+                        Section("表面") { codeEditor(t.front) }
+                        Section("裏面") { codeEditor(t.back) }
+                    }
+                    Section {
+                        codeEditor(d.css, minHeight: 160)
+                    } header: { Text("CSS") } footer: {
+                        Text("欄は {{欄の名前}}、裏面で表面を出すには {{FrontSide}} と書きます。Anki と同じ書き方です。")
+                    }
+                }
+            } else {
+                ProgressView()
+            }
+        }
+        .navigationTitle(draft?.name ?? "ノートタイプ")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .confirmationAction) {
+                Button("保存") { if structureChanged { confirmSave = true } else { save() } }.fontWeight(.semibold)
+                    .disabled(draft == nil || (draft?.fields.isEmpty ?? true))
+            }
+        }
+        .confirmationDialog("欄の構成を変えます", isPresented: $confirmSave, titleVisibility: .visible) {
+            Button("保存する", role: .destructive) { save() }
+        } message: { Text("このノートタイプの全カードの本文が、新しい欄の並びに書き換わります。削除した欄の内容は元に戻せません") }
+        .onAppear { if draft == nil { draft = store.notetypeDraft(notetypeId) } }
+    }
+
+    private var structureChanged: Bool {
+        guard let d = draft else { return false }
+        return d.fields.map { $0.originalOrd } != Array(0..<d.fields.count).map { Optional($0) } || d.fields.count != (store.notetypes[notetypeId]?.fieldNames.count ?? 0)
+    }
+
+    private func codeEditor(_ text: Binding<String>, minHeight: CGFloat = 110) -> some View {
+        TextEditor(text: text)
+            .font(.system(.footnote, design: .monospaced))
+            .autocorrectionDisabled()
+            .textInputAutocapitalization(.never)
+            .frame(minHeight: minHeight)
+    }
+
+    private func addField() {
+        let n = newField.trimmingCharacters(in: .whitespaces)
+        guard !n.isEmpty, !(draft?.fields.contains { $0.name == n } ?? true) else { return }
+        draft?.fields.append(FieldDraft(name: n, originalOrd: nil))
+        newField = ""
+    }
+
+    private func save() {
+        guard let d = draft else { return }
+        Task { await store.saveNotetype(d); dismiss() }
     }
 }
 

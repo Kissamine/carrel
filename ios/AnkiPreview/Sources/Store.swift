@@ -341,6 +341,27 @@ final class Store: ObservableObject {
         rebuildTags(); refilter()
     }
 
+    // ---- ノートタイプ ----
+
+    func notetypeDraft(_ id: Int64) -> NotetypeDraft? {
+        guard let db = try? CollectionDB(path: Self.collectionPath.path) else { return nil }
+        return (try? db.notetypeDraft(id: id)) ?? nil
+    }
+
+    /// 欄・テンプレート・CSS を保存して読み直す
+    func saveNotetype(_ d: NotetypeDraft) async {
+        guard write({ db in try db.saveNotetype(d) }) else { return }
+        await load()
+    }
+
+    /// ノートを別のノートタイプへ (本文は新しい並びで渡す)
+    func changeNotetype(_ note: Note, to mid: Int64, fields: [String], tags: [String]) async {
+        guard let nt = notetypes[mid] else { return }
+        let clean = Array(NSOrderedSet(array: tags.map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty })) as! [String]
+        guard write({ db in try db.changeNotetype(noteId: note.id, to: mid, fields: fields, tags: clean, templateCount: nt.templates.count) }) else { return }
+        await load()
+    }
+
     // ---- 学習 ----
 
     /// 学習の条件に合うカード。期限の来た復習・学習中 → 新規の順 (ランダム指定なら混ぜる)

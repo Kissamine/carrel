@@ -760,6 +760,21 @@ struct SettingsView: View {
                         Text("\(Int(store.textZoom * 100))%").monospacedDigit().frame(width: 48, alignment: .trailing)
                     }
                 }
+                Section {
+                    ForEach(store.notetypes.values.sorted { $0.name < $1.name }) { nt in
+                        NavigationLink {
+                            NotetypeEditorView(notetypeId: nt.id).environmentObject(store)
+                        } label: {
+                            HStack {
+                                Text(nt.name)
+                                Spacer()
+                                Text("\(nt.fieldNames.count) 欄").font(.footnote).foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                } header: { Text("ノートタイプ") } footer: {
+                    Text("欄の追加・並べ替え、表面・裏面のテンプレート、CSS を編集できます。")
+                }
                 Section("一覧") {
                     Toggle("タグを表示", isOn: $store.showTagsInList)
                     Toggle("期限を表示", isOn: $store.showDueInList)

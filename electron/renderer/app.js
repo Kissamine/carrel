@@ -2563,7 +2563,7 @@ async function syncFromMirror({ silentIfNone = true, theirsAll = false } = {}) {
     const d = await window.anki.mirrorDiff();
     if (!d) return true;
     const a = d.auto || {};
-    const hasAuto = (a.newNotes || a.deleted || a.cards || a.revlog);
+    const hasAuto = (a.newNotes || a.deleted || a.cards || a.revlog || a.notetypes);
     let choices = {};
     if (d.conflicts && d.conflicts.length && !theirsAll) {
       choices = await askMirrorConflicts(d.conflicts);
@@ -2579,6 +2579,7 @@ async function syncFromMirror({ silentIfNone = true, theirsAll = false } = {}) {
     if (r.updated) parts.push('更新 ' + r.updated);
     if (r.deleted) parts.push('削除 ' + r.deleted);
     if (r.cards) parts.push('学習・デッキ ' + r.cards);
+    if (r.notetypes) parts.push('ノートタイプ ' + r.notetypes);
     toast(parts.length ? 'iPhone の変更を取り込みました (' + parts.join(' / ') + ')' : 'iPhone と同じ内容です');
     await refreshAll();
     if (state.selected) {

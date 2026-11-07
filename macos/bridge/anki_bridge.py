@@ -99,6 +99,86 @@ class Bridge:
             raise RuntimeError("同期フォルダに collection.anki2 がありません")
         return sqlite3.connect(f"file:{path}?mode=ro", uri=True)
 
+    @staticmethod
+    def _proto_strings(blob: bytes) -> dict:
+        """protobuf の length-delimited フィールドを 番号 → 文字列 で集める (ノートタイプの CSS やテンプレート用)"""
+        out, i, n = {}, 0, len(blob)
+        def varint():
+            nonlocal i
+            r, sh = 0, 0
+            while i < n:
+                b = blob[i]; i += 1
+                r |= (b & 0x7F) << sh
+                if not b & 0x80:
+                    return r
+                sh += 7
+            return None
+        while i < n:
+            key = varint()
+            if key is None:
+                break
+            f, w = key >> 3, key & 7
+            if w == 0:
+                varint()
+            elif w == 1:
+                i += 8
+            elif w == 5:
+                i += 4
+            elif w == 2:
+                ln = varint()
+                if ln is None or i + ln > n:
+                    break
+                try:
+                    out[f] = blob[i:i + ln].decode("utf-8")
+                except UnicodeDecodeError:
+                    pass
+                i += ln
+            else:
+                break
+        return out
+
+    def _changed_notetypes(self, m: sqlite3.Connection) -> list:
+        """iPhone 側で更新されたノートタイプ (mtime がこちらより新しいもの) の id"""
+        col = self._col()
+        mine = {r[0]: r[1] for r in col.db.all("select id, mtime_secs from notetypes")}
+        return [r[0] for r in m.execute("select id, mtime_secs from notetypes") if r[0] in mine and r[1] > mine[r[0]]]
+
+    def _pull_notetypes(self, m: sqlite3.Connection, ids: list) -> int:
+        """iPhone 側のノートタイプ (名前・欄・テンプレート・CSS) を Anki のコレクションへ反映する。
+        欄の並べ替え・追加・削除は Anki の update_dict に任せ、ノートの本文の並べ替えも Anki が行う
+        (そのあと iPhone 側のノートが取り込まれて同じ内容になる)"""
+        col = self._col()
+        done = 0
+        for ntid in ids:
+            nt = col.models.get(ntid)
+            if not nt:
+                continue
+            name, cfg = m.execute("select name, config from notetypes where id = ?", (ntid,)).fetchone()
+            their_fields = [r[0] for r in m.execute("select name from fields where ntid = ? order by ord", (ntid,))]
+            their_tmpls = {r[0]: (r[1], r[2]) for r in m.execute("select ord, name, config from templates where ntid = ?", (ntid,))}
+            # 欄: 同じ名前の欄はそのまま (ord を保つので Anki が本文を正しく並べ替える)、新しい名前は足す
+            by_name = {f["name"]: f for f in nt["flds"]}
+            flds = []
+            for fname in their_fields:
+                if fname in by_name:
+                    flds.append(by_name[fname])
+                else:
+                    flds.append(col.models.new_field(fname))
+            nt["flds"] = flds
+            # テンプレート (数は変えない)
+            for t in nt["tmpls"]:
+                if t["ord"] in their_tmpls:
+                    tname, tcfg = their_tmpls[t["ord"]]
+                    strs = self._proto_strings(tcfg)
+                    t["name"] = tname
+                    t["qfmt"] = strs.get(1, t["qfmt"])
+                    t["afmt"] = strs.get(2, t["afmt"])
+            nt["css"] = self._proto_strings(cfg).get(3, nt["css"])
+            nt["name"] = name
+            col.models.update_dict(nt)
+            done += 1
+        return done
+
     def diffMirror(self, dest: str) -> dict:
         """Anki のコレクションと iCloud 側 (iPhone が書いたもの) の違いを調べる。
 
@@ -116,6 +196,21 @@ class Bridge:
         mine = {r[0]: r for r in col.db.all("select id, mod, flds, tags, mid from notes")}
         my_revlog = {r[0] for r in col.db.all("select id from revlog")}
         my_cards = {r[0]: r for r in col.db.all("select id, nid, mod from cards")}
+        # ノートタイプの欄が変わっていると本文の区切りも変わる。欄の名前ごとに比べて、同じなら食い違いとしない
+        m3 = self._mirror_db(dest)
+        try:
+            changed_nt = set(self._changed_notetypes(m3))
+            their_fnames = {}
+            for ntid, ord_, fname in m3.execute("select ntid, ord, name from fields order by ntid, ord"):
+                their_fnames.setdefault(ntid, []).append(fname)
+        finally:
+            m3.close()
+        my_fnames = {nt["id"]: [f["name"] for f in nt["flds"]] for nt in col.models.all()}
+        def same_by_name(mid, mine_flds, their_flds):
+            a = dict(zip(my_fnames.get(mid, []), mine_flds.split("\x1f")))
+            b = dict(zip(their_fnames.get(mid, []), their_flds.split("\x1f")))
+            common = set(a) & set(b)
+            return bool(common) and all(a[k] == b[k] for k in common) and all(not v for k, v in b.items() if k not in a)
 
         conflicts = []
         mac_newer = 0
@@ -125,6 +220,8 @@ class Bridge:
                 continue
             if me[2] == t[2] and me[3].strip() == t[3].strip():
                 continue
+            if t[4] in changed_nt and me[3].strip() == t[3].strip() and same_by_name(t[4], me[2], t[2]):
+                continue   # 欄の構成が変わっただけ (ノートタイプの取り込みでそろう)
             if t[1] > me[1]:
                 nt = col.models.get(me[4])
                 names = [f["name"] for f in nt["flds"]] if nt else []
@@ -140,9 +237,14 @@ class Bridge:
         deleted = [nid for nid in mine if nid not in theirs and nid in their_graves]
         card_updates = [cid for cid, c in their_cards.items() if cid in my_cards and c[2] > my_cards[cid][2]]
         new_revlog = len(their_revlog - my_revlog)
+        m2 = self._mirror_db(dest)
+        try:
+            nt_changed = len(self._changed_notetypes(m2))
+        finally:
+            m2.close()
         return {
             "conflicts": conflicts,
-            "auto": {"newNotes": len(new_notes), "deleted": len(deleted), "cards": len(card_updates), "revlog": new_revlog},
+            "auto": {"newNotes": len(new_notes), "deleted": len(deleted), "cards": len(card_updates), "revlog": new_revlog, "notetypes": nt_changed},
             "macNewer": mac_newer,
         }
 
@@ -154,6 +256,8 @@ class Bridge:
         col = self._col()
         choices = choices or {}
         m = self._mirror_db(dest)
+        # 0) ノートタイプの変更 (欄・テンプレート・CSS) を先に反映する。ノートの本文はそのあとで写す
+        notetypes = self._pull_notetypes(m, self._changed_notetypes(m))
         try:
             theirs = {r[0]: r for r in m.execute(
                 "select id, guid, mid, mod, usn, tags, flds, sfld, csum, flags, data from notes")}
@@ -223,7 +327,7 @@ class Bridge:
             col.db.execute("insert into revlog (id, cid, usn, ease, ivl, lastIvl, factor, time, type) values (?,?,?,?,?,?,?,?,?)",
                            r[0], r[1], -1, r[3], r[4], r[5], r[6], r[7], r[8])
             revlog += 1
-        return {"added": added, "updated": updated, "deleted": deleted, "cards": cards, "revlog": revlog}
+        return {"added": added, "updated": updated, "deleted": deleted, "cards": cards, "revlog": revlog, "notetypes": notetypes}
 
     def _col(self) -> Collection:
         if self.col is None:
