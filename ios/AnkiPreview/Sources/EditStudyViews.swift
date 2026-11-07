@@ -211,13 +211,17 @@ struct StudyView: View {
                     let bg = store.cardBackground(for: note, dark: dark) ?? Color(.systemBackground)
                     // カードは画面いっぱい (上下の余白なし)。カウンターとボタンはその上に重ねる (地は透明) ので、
                     // Liquid Glass が中身を透かす。中身がボタンに隠れないぶんは HTML 側の余白でとる
-                    PreviewView(html: store.studyHTML(card: card, back: showBack, dark: dark), mediaDir: Store.mediaDir,
-                                highlights: [], controller: preview,
-                                onImage: { url in store.lightbox = LightboxItem(url: url) })
-                        .ignoresSafeArea()
-                        .id(card.id)                 // カードが変わったら作り直して、フェードで切り替える
-                        .transition(.opacity)
-                        .overlay(alignment: .bottom) { answerBar(card) }
+                    // 地はフェードの外に置く (切り替えの一瞬、下の画面が透けないように)
+                    ZStack {
+                        bg.ignoresSafeArea()
+                        PreviewView(html: store.studyHTML(card: card, back: showBack, dark: dark), mediaDir: Store.mediaDir,
+                                    highlights: [], controller: preview,
+                                    onImage: { url in store.lightbox = LightboxItem(url: url) })
+                            .ignoresSafeArea()
+                            .id(card.id)                 // カードが変わったら作り直して、フェードで切り替える
+                            .transition(.opacity)
+                    }
+                    .overlay(alignment: .bottom) { answerBar(card) }
                     // カウンター (プレビューの「1 / 114」と同じ見た目)。スクロールしても動かないよう、カードの上に重ねて固定
                     .overlay(alignment: .top) {
                         Text("\(min(done + 1, total)) / \(total)")
@@ -226,7 +230,6 @@ struct StudyView: View {
                             .glassEffect(.regular, in: Capsule())
                             .padding(.top, 4)
                     }
-                    .background(bg.ignoresSafeArea())
                     .toolbarBackground(.hidden, for: .navigationBar)
                     .toolbarColorScheme(bg.isDark ? .dark : .light, for: .navigationBar)
                 } else {
