@@ -120,6 +120,24 @@ final class Store: ObservableObject {
         await importFolder(url)
     }
 
+    /// 取り込み元 (iCloud) の collection.anki2 の更新日時
+    nonisolated static func sourceModified(_ folder: URL) -> Date? {
+        let ok = folder.startAccessingSecurityScopedResource()
+        defer { if ok { folder.stopAccessingSecurityScopedResource() } }
+        let col = folder.appendingPathComponent("collection.anki2")
+        let keys: Set<URLResourceKey> = [.contentModificationDateKey]
+        return try? col.resourceValues(forKeys: keys).contentModificationDate
+    }
+
+    /// アプリを開いたとき: Mac 側 (iCloud) のコレクションが前回より新しければ、裏で取り込み直す
+    func checkForUpdates() async {
+        guard !loading, !importingMedia, let url = lastImportURL else { return }
+        let last = UserDefaults.standard.object(forKey: "importSourceMod") as? Date
+        let mod = await Task.detached { Self.sourceModified(url) }.value
+        guard let mod, last == nil || mod > last! else { return }
+        await importFolder(url)
+    }
+
     /// 取り込みの進み具合 (画面に出す)
     @Published var importProgress = ""
     /// メディアを裏で写している最中か (一覧や閲覧はその間も使える)
@@ -166,6 +184,8 @@ final class Store: ObservableObject {
             UserDefaults.standard.set(bm, forKey: "importBookmark")
             UserDefaults.standard.set(url.lastPathComponent, forKey: "importName")
         }
+        // 取り込み元の更新日時。次に開いたとき、これより新しければ自動で取り込み直す
+        if let mod = Self.sourceModified(url) { UserDefaults.standard.set(mod, forKey: "importSourceMod") }
         await load()          // ここで一覧が出る。以降はメディアを裏で写すだけ
         loading = false
 
@@ -389,15 +409,31 @@ final class Store: ObservableObject {
         }
     }
 
+    /// macOS 版と同じ関連度の点数
+    private func score(_ n: Note, _ needle: String) -> Int {
+        var p = 0
+        let title = n.titleLines.joined(separator: " ").lowercased()
+        if title.hasPrefix(needle) { p += 100 }
+        if title.contains(needle) { p += 50 }
+        if n.plainLower.contains(needle) { p += 10 }
+        return p
+    }
+
     func refilter() {
         let q = query
+        let needle = keyword.trimmingCharacters(in: .whitespaces).lowercased()
         var list = notes.filter { n in
             if let d = selectedDeck, noteDecks[n.id] != d { return false }
             if !selectedTags.isEmpty, !selectedTags.isSubset(of: Set(n.tags)) { return false }
             if !passesStatus(n) { return false }
             return matches(n, q)
         }
-        switch sortMode {
+        // 語で検索しているときは、並びが「名前」のままなら自動で関連度順に (macOS 版と同じ)
+        let mode = (!needle.isEmpty && (sortMode == "name" || sortMode == "relevance")) ? "relevance" : sortMode
+        switch mode {
+        case "relevance":
+            let points = Dictionary(uniqueKeysWithValues: list.map { ($0.id, score($0, needle)) })
+            list.sort { (points[$0.id] ?? 0) != (points[$1.id] ?? 0) ? (points[$0.id] ?? 0) > (points[$1.id] ?? 0) : $0.sortKey < $1.sortKey }
         case "modified": list.sort { $0.modified > $1.modified }
         case "created": list.sort { $0.id > $1.id }
         case "due":

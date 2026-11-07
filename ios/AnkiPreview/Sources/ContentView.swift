@@ -439,6 +439,7 @@ struct NoteListView: View {
             Divider()
             Picker("並び", selection: $store.sortMode) {
                 Label("名前", systemImage: "textformat").tag("name")
+                Label("関連度 (検索中)", systemImage: "sparkle.magnifyingglass").tag("relevance")
                 Label("更新が新しい順", systemImage: "clock").tag("modified")
                 Label("作成が新しい順", systemImage: "plus.circle").tag("created")
                 Label("期限が近い順", systemImage: "calendar").tag("due")
@@ -665,7 +666,7 @@ struct SettingsView: View {
                             dismiss(); Task { await store.reimport() }
                         } label: {
                             HStack {
-                                Label("「\(name)」から更新", systemImage: "arrow.clockwise")
+                                Label("「\(name)」から今すぐ更新", systemImage: "arrow.clockwise")
                                 if store.loading || store.importingMedia { Spacer(); ProgressView().controlSize(.small); Text(store.importProgress).font(.footnote).foregroundStyle(.secondary) }
                             }
                         }.disabled(store.loading || store.importingMedia)
@@ -676,7 +677,7 @@ struct SettingsView: View {
                             if store.loading || store.importingMedia { Spacer(); ProgressView().controlSize(.small); Text(store.importProgress).font(.footnote).foregroundStyle(.secondary) }
                         }
                     }.disabled(store.loading || store.importingMedia)
-                    Text("Mac の ~/Library/Application Support/Anki2/<プロフィール名>/ を iCloud Drive などに写し、そのフォルダを選んでください (collection.anki2 と collection.media が入っているもの)。").font(.footnote).foregroundStyle(.secondary)
+                    Text("macOS 版 Carrel で編集を保存すると、iCloud Drive の Carrel/<プロフィール名> に自動で書き出されます。そのフォルダを一度選んでおくと、以後はアプリを開いたときに変更分だけを自動で取り込みます。").font(.footnote).foregroundStyle(.secondary)
                     if let e = store.error { Text(e).font(.footnote).foregroundStyle(.red) }
                 }
                 Section("表示") {

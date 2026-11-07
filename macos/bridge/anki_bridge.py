@@ -12,6 +12,9 @@ API と同じものを、同じ名前で並べてある。
 
 import base64
 import json
+import os
+import shutil
+import sqlite3
 import sys
 import threading
 import traceback
@@ -38,6 +41,54 @@ class Bridge:
         if self.col is not None:
             self.col.close()
             self.col = None
+
+    # ------------------------------------------------------- iCloud への書き出し
+
+    def mirror(self, src: str, dest: str) -> dict:
+        """コレクションとメディアを dest (iCloud Drive のフォルダ) へ写す。変わった分だけ。
+
+        DB は SQLite のバックアップ API で写すので、開いたままでも WAL の内容まで含めて一貫した形になる。
+        メディアは名前・大きさ・更新時刻で見比べ、変わったものだけ写し、なくなったものは消す。"""
+        os.makedirs(dest, exist_ok=True)
+        # 1) コレクション本体
+        tmp = os.path.join(dest, "collection.incoming")
+        with sqlite3.connect(f"file:{src}?mode=ro", uri=True) as s, sqlite3.connect(tmp) as d:
+            s.backup(d)
+        os.replace(tmp, os.path.join(dest, "collection.anki2"))
+        for side in ("collection.anki2-wal", "collection.anki2-shm"):
+            try:
+                os.remove(os.path.join(dest, side))
+            except FileNotFoundError:
+                pass
+        # 2) メディア (差分)
+        src_media = os.path.join(os.path.dirname(src), "collection.media")
+        dst_media = os.path.join(dest, "collection.media")
+        os.makedirs(dst_media, exist_ok=True)
+        have = {}
+        for e in os.scandir(dst_media):
+            if e.is_file():
+                st = e.stat()
+                have[e.name] = (st.st_size, int(st.st_mtime))
+        copied = removed = 0
+        seen = set()
+        if os.path.isdir(src_media):
+            for e in os.scandir(src_media):
+                if not e.is_file() or e.name.startswith("."):
+                    continue
+                seen.add(e.name)
+                st = e.stat()
+                if have.get(e.name) == (st.st_size, int(st.st_mtime)):
+                    continue
+                shutil.copy2(e.path, os.path.join(dst_media, e.name))
+                copied += 1
+        for name in have:
+            if name not in seen and not name.startswith("."):
+                try:
+                    os.remove(os.path.join(dst_media, name))
+                    removed += 1
+                except OSError:
+                    pass
+        return {"copied": copied, "removed": removed, "total": len(seen)}
 
     def _col(self) -> Collection:
         if self.col is None:

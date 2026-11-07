@@ -2124,6 +2124,14 @@ function livePreview() {
   }, 700);   // 打鍵が止まってから更新する (打ちながら更新すると引っかかる)
 }
 
+
+// 変更を保存したあと、少し待ってから iCloud Drive へ書き出す (続けて保存しても 1 回にまとめる)
+let mirrorTimer = null;
+function scheduleMirror() {
+  clearTimeout(mirrorTimer);
+  mirrorTimer = setTimeout(() => { window.anki.mirrorNow(false).catch((e) => window.anki.mark('iCloud 書き出し失敗: ' + e.message)); }, 3000);
+}
+
 async function save({ sync: alsoSync = null } = {}) {
   // 一覧用に切り詰めた内容を、そのまま保存させない (取り違えると本文が消える)
   if (state.draft && state.draft.brief) {
@@ -2150,6 +2158,7 @@ async function save({ sync: alsoSync = null } = {}) {
     });
     state.dirty = false;
     updateSaveButton();
+    scheduleMirror();
     const rendered = await call('renderNote', { id: state.selected.id });
     showCard(rendered);
     await search();
@@ -2625,6 +2634,7 @@ async function addNote() {
   const deckId = await call('deckId', { name: el('addDeck').value });
   const notetypeId = Number(el('addModel').value);
   const names = await call('fieldNames', { notetypeId });
+  scheduleMirror();
   const created = await call('addNote', {
     notetypeId,
     deckId,
@@ -2660,6 +2670,7 @@ async function deleteNote() {
     console.log('[trash] 控えを取れません: ' + e.message);
   }
   await call('deleteNotes', { ids: [note.id] });
+  scheduleMirror();
   el('deleteDialog').close();
   state.selected = null;
   closeEditor();

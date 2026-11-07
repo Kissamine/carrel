@@ -153,6 +153,32 @@ async function ankiPane(detail, ctx) {
   open.style.marginTop = '10px';
   open.onclick = () => { ctx.sync(); };
   box.append(sel, where, state, open);
+
+  // iPhone 版のための iCloud Drive への書き出し
+  const ms = await window.anki.mirrorStatus();
+  const mbox = row(detail, 'iPhone 版 Carrel 用に iCloud Drive へ書き出す');
+  const toggle = document.createElement('label');
+  toggle.style.cssText = 'display:flex;align-items:center;gap:8px;cursor:pointer';
+  const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = ms.enabled;
+  cb.onchange = async () => { await window.anki.mirrorSetEnabled(cb.checked); ctx.toast(cb.checked ? '保存のたびに iCloud へ書き出します' : 'iCloud への書き出しを止めました'); };
+  toggle.append(cb, document.createTextNode('保存のたびに、変わった分だけ自動で書き出す'));
+  const mwhere = document.createElement('div');
+  mwhere.className = 'hint'; mwhere.style.marginTop = '8px';
+  mwhere.textContent = (ms.dir || '') + (ms.at ? '　(最終: ' + new Date(ms.at).toLocaleString('ja-JP') + ')' : '');
+  const now = document.createElement('button');
+  now.className = 'pill'; now.textContent = '今すぐ書き出す'; now.style.marginTop = '10px';
+  now.onclick = async () => {
+    now.disabled = true; now.textContent = '書き出しています…';
+    try {
+      const r = await window.anki.mirrorNow(true);
+      ctx.toast(r ? '書き出しました (メディア ' + r.copied + ' 件を更新)' : '書き出せませんでした');
+    } catch (e) { ctx.toast('書き出しに失敗: ' + e.message); }
+    now.disabled = false; now.textContent = '今すぐ書き出す';
+  };
+  const mhint = document.createElement('div');
+  mhint.className = 'hint'; mhint.style.marginTop = '8px';
+  mhint.textContent = 'iPhone 版 Carrel の設定で、このフォルダを一度選んでください。以後はアプリを開くたびに変更分を自動で取り込みます';
+  mbox.append(toggle, mwhere, now, mhint);
 }
 
 async function accountPaneLegacy(detail, ctx) {

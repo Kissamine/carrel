@@ -461,6 +461,37 @@ app.whenReady().then(async () => {
     if (collectionOpen) { try { await bridge.call('close', {}); } catch {} collectionOpen = false; }
     return currentProfile();
   });
+  // iCloud Drive へ書き出す (iPhone 版 Carrel が読む)。保存のたびに変わった分だけ
+  const mirrorDir = () => {
+    const s = readSettings();
+    if (s.icloudMirrorDir) return s.icloudMirrorDir;
+    const p = currentProfile();
+    return p ? path.join(os.homedir(), 'Library/Mobile Documents/com~apple~CloudDocs/Carrel', p) : null;
+  };
+  const mirrorEnabled = () => readSettings().icloudMirror !== false;
+  let mirroring = null;
+  async function mirrorNow(force = false) {
+    const src = collectionPath(), dest = mirrorDir();
+    if (!src || !dest || (!force && !mirrorEnabled())) return null;
+    if (mirroring) return mirroring;
+    mirroring = (async () => {
+      try {
+        await ensureBridge();
+        const r = await bridge.call('mirror', { src, dest });
+        const all = readSettings(); all.icloudMirroredAt = Date.now(); writeSettings(all);
+        mark('iCloud へ書き出し: メディア ' + r.copied + ' 件を写し、' + r.removed + ' 件を消した');
+        return r;
+      } finally { mirroring = null; }
+    })();
+    return mirroring;
+  }
+  ipcMain.handle('mirror:now', (_e, force) => mirrorNow(!!force));
+  ipcMain.handle('mirror:status', () => {
+    const s = readSettings();
+    return { enabled: mirrorEnabled(), dir: mirrorDir(), at: s.icloudMirroredAt || null };
+  });
+  ipcMain.handle('mirror:setEnabled', (_e, on) => { const s = readSettings(); s.icloudMirror = !!on; writeSettings(s); return mirrorEnabled(); });
+
   // Anki 本体を開く (同期は Anki で行う)。その前にこちらはコレクションを手放す
   ipcMain.handle('anki:launch', async () => {
     if (collectionOpen) { try { await bridge.call('close', {}); } catch {} collectionOpen = false; mark('Anki を開くためにコレクションを閉じた'); }
