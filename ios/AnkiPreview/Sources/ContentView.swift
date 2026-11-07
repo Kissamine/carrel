@@ -253,13 +253,13 @@ struct TagChips: View {
 
     private func chip(_ tag: String) -> some View {
         HStack(spacing: 3) {
-            Text(tag).font(.caption2).lineLimit(1)
+            Text(tag).font(wrap ? .subheadline : .caption2).lineLimit(1)
             if let onRemove {
-                Button { onRemove(tag) } label: { Image(systemName: "xmark").font(.system(size: 8, weight: .bold)) }
+                Button { onRemove(tag) } label: { Image(systemName: "xmark").font(.system(size: wrap ? 11 : 8, weight: .bold)) }
                     .buttonStyle(.plain)
             }
         }
-        .padding(.horizontal, 7).padding(.vertical, 3)
+        .padding(.horizontal, wrap ? 10 : 7).padding(.vertical, wrap ? 5 : 3)
         .background(Color.accentColor.opacity(0.12), in: Capsule())
         .foregroundStyle(Color.accentColor)
         .fixedSize()
