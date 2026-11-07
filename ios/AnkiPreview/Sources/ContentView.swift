@@ -286,10 +286,13 @@ extension Array {
 
 struct LightboxView: View {
     @Environment(\.dismiss) var dismiss
+    @Environment(\.horizontalSizeClass) private var sizeClass
     let url: URL
 
     var body: some View {
-        ZStack(alignment: .topTrailing) {
+        // ボタンは右下に。見開き (Duo) ではサイドバーの右下あたりに
+        let wide = sizeClass == .regular
+        ZStack(alignment: wide ? .bottomLeading : .bottomTrailing) {
             Color.black.ignoresSafeArea()
             if let img = UIImage(contentsOfFile: url.path) {
                 ZoomableImage(image: img).ignoresSafeArea()
@@ -307,6 +310,7 @@ struct LightboxView: View {
             .foregroundStyle(.white)
             .colorScheme(.dark)
             .padding()
+            .padding(.leading, wide ? UIScreen.main.bounds.width * 0.34 - 120 : 0)
         }
         .statusBarHidden()
         .onTapGesture { dismiss() }
@@ -455,7 +459,7 @@ struct NoteListView: View {
         .navigationTitle("")   // 題はロゴ (左端) で出すので、文字の題は空に
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .topBarLeading) { CarrelLogoView(height: 18).padding(.leading, 4) }
+            ToolbarItem(placement: .topBarLeading) { CarrelLogoView(height: 20).padding(.leading, 4) }
                 .sharedBackgroundVisibility(.hidden)   // ロゴはボタン (ガラスの地) に見せない
             if !wide {
                 ToolbarItem(placement: .topBarTrailing) { optionsMenu }
