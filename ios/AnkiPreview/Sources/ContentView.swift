@@ -374,6 +374,21 @@ struct NoteListView: View {
     /// 並び・設定などのメニュー。Duo のように横に広い (サイドバーが出る) ときは下側に置く
     private var optionsMenu: some View {
         Menu {
+            Menu {
+                Button("すべてのデッキ") { store.selectedDeck = nil }
+                ForEach(store.decks) { d in
+                    Button { store.selectedDeck = d.id } label: {
+                        if store.selectedDeck == d.id { Label(d.name, systemImage: "checkmark") } else { Text(d.name) }
+                    }
+                }
+            } label: { Label(store.decks.first { $0.id == store.selectedDeck }?.name ?? "すべてのデッキ", systemImage: "rectangle.stack") }
+            Picker(selection: $store.statusFilter) {
+                ForEach(Self.statusNames, id: \.0) { key, name, icon in Label(name, systemImage: icon).tag(key) }
+            } label: {
+                Label("学習状況", systemImage: Self.statusNames.first { $0.0 == store.statusFilter }?.2 ?? "tray.full")
+            }
+            .pickerStyle(.menu)
+            Divider()
             Picker("並び", selection: $store.sortMode) {
                 Label("名前", systemImage: "textformat").tag("name")
                 Label("更新が新しい順", systemImage: "clock").tag("modified")
@@ -394,8 +409,10 @@ struct NoteListView: View {
 
     var body: some View {
         List(selection: $store.selectedNoteId) {
-            ForEach(store.filtered) { note in
+            ForEach(Array(store.filtered.enumerated()), id: \.element.id) { i, note in
                 NoteRow(note: note, query: store.query).tag(note.id)
+                    // 先頭行の上の線は、タグの帯の下に重なって見えるので消す
+                    .listRowSeparator(i == 0 ? .hidden : .visible, edges: .top)
             }
         }
         .listStyle(.plain)
@@ -405,7 +422,7 @@ struct NoteListView: View {
         .background(Color(.systemBackground))
         // デッキ・学習状況・タグの帯は検索バーの直下に固定 (macOS 版と同じ)
         .safeAreaInset(edge: .top, spacing: 0) {
-            if !store.allTags.isEmpty || !store.decks.isEmpty {
+            if !store.allTags.isEmpty {
                 filters
                     .padding(.vertical, 6)
                     // 検索バーごと覆う地。上は不透明で、帯の下端で透明になる
@@ -420,7 +437,8 @@ struct NoteListView: View {
             }
         }
         .toolbarBackground(.hidden, for: .navigationBar)
-        .searchable(text: $store.keyword, placement: .navigationBarDrawer(displayMode: .always), prompt: "検索")
+        .searchable(text: $store.keyword, placement: .toolbar, prompt: "検索")
+        .searchToolbarBehavior(.minimize)
         .autocorrectionDisabled()
         .navigationTitle("Carrel")
         .navigationBarTitleDisplayMode(.inline)
@@ -429,12 +447,15 @@ struct NoteListView: View {
             if !wide {
                 ToolbarItem(placement: .topBarTrailing) { optionsMenu }
             }
-            ToolbarItem(placement: .status) {
-                Text("\(store.filtered.count) 件").font(.footnote).foregroundStyle(.secondary).fixedSize().padding(.horizontal, 8)
-            }
             if wide {
                 ToolbarItem(placement: .bottomBar) { optionsMenu }
             }
+            ToolbarItem(placement: .status) {
+                Text("\(store.filtered.count) 件").font(.footnote).foregroundStyle(.secondary).fixedSize().padding(.horizontal, 8)
+            }
+            // 検索は下のバーの右端に (縮んでアイコンになる)
+            ToolbarSpacer(.flexible, placement: .bottomBar)
+            DefaultToolbarItem(kind: .search, placement: .bottomBar)
         }
         .safeAreaInset(edge: .bottom) {
             if store.importingMedia {
@@ -482,27 +503,11 @@ struct NoteListView: View {
         ("review", "学習中・復習中", "repeat"), ("suspended", "停止中", "pause.circle"), ("flagged", "フラグ付き", "flag"),
     ]
 
-    /// デッキ・学習状況・タグのチップ (横スクロール)
+    /// タグのチップ (横スクロール)。デッキと学習状況はメニューから
     private var filters: some View {
         Group {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
-                    Menu {
-                        Button("すべてのデッキ") { store.selectedDeck = nil }
-                        ForEach(store.decks) { d in
-                            Button(d.name) { store.selectedDeck = d.id }
-                        }
-                    } label: {
-                        chip(store.decks.first { $0.id == store.selectedDeck }?.name ?? "すべてのデッキ", on: store.selectedDeck != nil, icon: "rectangle.stack")
-                    }
-                    Menu {
-                        Picker("学習状況", selection: $store.statusFilter) {
-                            ForEach(Self.statusNames, id: \.0) { key, name, icon in Label(name, systemImage: icon).tag(key) }
-                        }
-                    } label: {
-                        let cur = Self.statusNames.first { $0.0 == store.statusFilter }
-                        chip(store.statusFilter == "all" ? "学習状況" : (cur?.1 ?? ""), on: store.statusFilter != "all", icon: cur?.2 ?? "tray.full")
-                    }
                     ForEach(store.allTags, id: \.0) { tag, count in
                         Button {
                             if store.selectedTags.contains(tag) { store.selectedTags.remove(tag) } else { store.selectedTags.insert(tag) }
