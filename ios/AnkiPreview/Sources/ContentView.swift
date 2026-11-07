@@ -407,6 +407,8 @@ struct NoteListView: View {
     @Binding var showSettings: Bool
     /// 横に広い画面 (Duo を開いたとき・iPad) か
     var wide: Bool
+    /// スワイプで削除しようとしているカード
+    @State private var pendingDelete: Note? = nil
 
     /// 並び・設定などのメニュー。Duo のように横に広い (サイドバーが出る) ときは下側に置く
     private var optionsMenu: some View {
@@ -453,6 +455,10 @@ struct NoteListView: View {
         List(selection: $store.selectedNoteId) {
             ForEach(Array(store.filtered.enumerated()), id: \.element.id) { i, note in
                 NoteRow(note: note, query: store.query).tag(note.id)
+                    // 左にスワイプで削除 (確認してから)
+                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                        Button(role: .destructive) { pendingDelete = note } label: { Label("削除", systemImage: "trash") }
+                    }
                     // 先頭行の上の線は、タグの帯の下に重なって見えるので消す
                     .listRowSeparator(i == 0 ? .hidden : .visible, edges: .top)
                     .listRowInsets(EdgeInsets(top: 10, leading: 20, bottom: 10, trailing: 20))
@@ -494,6 +500,10 @@ struct NoteListView: View {
             }
         }
         .toolbarBackground(.hidden, for: .navigationBar)
+        .confirmationDialog("このカードを削除しますか？", isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }), titleVisibility: .visible) {
+            Button("削除", role: .destructive) { if let n = pendingDelete { store.deleteNote(n) }; pendingDelete = nil }
+            Button("キャンセル", role: .cancel) { pendingDelete = nil }
+        } message: { Text("ノートとそのカードが消えます。同期フォルダにも反映されます") }
         .modifier(CompactSearch(enabled: !wide, text: $store.keyword))
         .autocorrectionDisabled()
         .navigationTitle("")   // 題はロゴ (左端) で出すので、文字の題は空に
