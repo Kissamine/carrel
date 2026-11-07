@@ -290,16 +290,20 @@ struct LightboxView: View {
 
     var body: some View {
         GeometryReader { geo in
-            // 画像は常に画面いっぱい (サイドバーも出さない)。ボタンは画面全体の幅に対して下の中央に重ねる
-            let _ = geo
-            ZStack(alignment: .bottom) {
+            // 画像は常に画面いっぱい。ボタンは「物理画面」の横幅の中央に置く。
+            // 畳んだ Duo ではこのビューの枠が画面に対して横にずれることがあるので、
+            // 枠の座標ではなく画面の座標で中央を求めて、そのぶんを差し引く
+            let frame = geo.frame(in: .global)
+            let screenW = UIScreen.main.bounds.width
+            ZStack {
                 Color.black.ignoresSafeArea()
                 if let img = UIImage(contentsOfFile: url.path) {
                     ZoomableImage(image: img).ignoresSafeArea()
                 } else {
                     ContentUnavailableView("画像を開けません", systemImage: "photo").foregroundStyle(.white)
                 }
-                HStack(spacing: 10) { shareButton; closeButton }.padding(16)
+                HStack(spacing: 10) { shareButton; closeButton }
+                    .position(x: screenW / 2 - frame.minX, y: frame.height - 16 - 24)
             }
         }
         .colorScheme(.dark)
