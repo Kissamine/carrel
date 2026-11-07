@@ -452,8 +452,13 @@ struct NoteListView: View {
         .background(Color(.systemBackground))
         // デッキ・学習状況・タグの帯は検索バーの直下に固定 (macOS 版と同じ)
         .safeAreaInset(edge: .top, spacing: 0) {
-            if !store.allTags.isEmpty {
-                filters
+            if wide || !store.allTags.isEmpty {
+                VStack(spacing: 6) {
+                    // 見開きでは、下のバーの検索アイコンでなく、ロゴの下に検索欄を置く
+                    // (カード内検索のボタンと並んで紛らわしいため)
+                    if wide { wideSearchField }
+                    if !store.allTags.isEmpty { filters }
+                }
                     .padding(.top, 6).padding(.bottom, 18)
                     // 検索バーごと覆う地。チップの部分までは不透明で、その下の余白でだけ透明になる
                     // (一覧をスクロールしたとき、チップと行が重なって読めなくならないように)
@@ -470,8 +475,7 @@ struct NoteListView: View {
             }
         }
         .toolbarBackground(.hidden, for: .navigationBar)
-        .searchable(text: $store.keyword, placement: .toolbar, prompt: "検索")
-        .searchToolbarBehavior(.minimize)
+        .modifier(CompactSearch(enabled: !wide, text: $store.keyword))
         .autocorrectionDisabled()
         .navigationTitle("")   // 題はロゴ (左端) で出すので、文字の題は空に
         .navigationBarTitleDisplayMode(.inline)
@@ -487,9 +491,11 @@ struct NoteListView: View {
             ToolbarItem(placement: .status) {
                 Text("\(store.filtered.count) 件").font(.footnote).foregroundStyle(.secondary).fixedSize().padding(.horizontal, 8)
             }
-            // 検索は下のバーの右端に (縮んでアイコンになる)
-            ToolbarSpacer(.flexible, placement: .bottomBar)
-            DefaultToolbarItem(kind: .search, placement: .bottomBar)
+            // iPhone 幅では検索を下のバーの右端に (縮んでアイコンになる)
+            if !wide {
+                ToolbarSpacer(.flexible, placement: .bottomBar)
+                DefaultToolbarItem(kind: .search, placement: .bottomBar)
+            }
         }
         .safeAreaInset(edge: .bottom) {
             if store.importingMedia {
@@ -537,6 +543,25 @@ struct NoteListView: View {
         ("review", "学習中・復習中", "repeat"), ("suspended", "停止中", "pause.circle"), ("flagged", "フラグ付き", "flag"),
     ]
 
+    /// 見開き用の検索欄 (ロゴの下)
+    private var wideSearchField: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+            TextField("検索", text: $store.keyword)
+                .textFieldStyle(.plain)
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.never)
+                .submitLabel(.search)
+            if !store.keyword.isEmpty {
+                Button { store.keyword = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary) }
+                    .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 10).padding(.vertical, 8)
+        .background(Color(.secondarySystemFill), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .padding(.horizontal, 16)
+    }
+
     /// タグのチップ (横スクロール)。デッキと学習状況はメニューから
     private var filters: some View {
         Group {
@@ -562,6 +587,21 @@ struct NoteListView: View {
         .padding(.horizontal, 12).padding(.vertical, 7)
         .background(on ? Color.accentColor.opacity(0.22) : Color(.secondarySystemFill), in: Capsule())
         .foregroundStyle(on ? Color.accentColor : .primary)
+    }
+}
+
+/// iPhone 幅のときだけ、下のバーに縮む検索を付ける
+private struct CompactSearch: ViewModifier {
+    let enabled: Bool
+    @Binding var text: String
+    func body(content: Content) -> some View {
+        if enabled {
+            content
+                .searchable(text: $text, placement: .toolbar, prompt: "検索")
+                .searchToolbarBehavior(.minimize)
+        } else {
+            content
+        }
     }
 }
 
