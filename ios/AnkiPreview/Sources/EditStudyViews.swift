@@ -195,6 +195,7 @@ struct StudyView: View {
     @State private var showBack = false
     @State private var shownAt = Date()
     @State private var done = 0
+    @State private var total = 0
     @StateObject private var preview = PreviewController()
 
     private var current: CardInfo? { queue.first }
@@ -225,10 +226,18 @@ struct StudyView: View {
                     }
                 }
             }
-            .navigationTitle(current.map { _ in "残り \(queue.count) 枚" } ?? "学習")
+            .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("終了") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { Button { dismiss() } label: { Image(systemName: "xmark") } }
+                if current != nil {
+                    // プレビューの「1 / 114」と同じ見た目
+                    ToolbarItem(placement: .principal) {
+                        Text("\(min(done + 1, total)) / \(total)")
+                            .font(.footnote).monospacedDigit().foregroundStyle(.secondary).fixedSize()
+                            .padding(.horizontal, 8)
+                    }
+                }
                 if let card = current {
                     ToolbarItem(placement: .topBarTrailing) {
                         Menu {
@@ -239,7 +248,7 @@ struct StudyView: View {
                     }
                 }
             }
-            .onAppear { queue = store.studyQueue(options); shownAt = Date() }
+            .onAppear { queue = store.studyQueue(options); total = queue.count; shownAt = Date() }
         }
     }
 
@@ -384,7 +393,7 @@ struct StudySetupView: View {
             .navigationTitle("学習")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("キャンセル") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { Button { dismiss() } label: { Image(systemName: "xmark") } }
                 ToolbarItem(placement: .confirmationAction) {
                     let n = store.studyQueue(o).count
                     Button("開始 (\(n))") { start() }.fontWeight(.semibold).disabled(n == 0)
