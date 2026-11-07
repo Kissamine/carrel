@@ -307,7 +307,12 @@ struct NoteListView: View {
             }
         }
         .overlay {
-            if store.loading { ProgressView().controlSize(.large) }
+            if store.loading {
+                VStack(spacing: 10) {
+                    ProgressView().controlSize(.large)
+                    if !store.importProgress.isEmpty { Text(store.importProgress).font(.footnote).foregroundStyle(.secondary) }
+                }
+            }
             else if !store.hasCollection {
                 ContentUnavailableView {
                     Label("コレクションがありません", systemImage: "tray.and.arrow.down")
@@ -443,7 +448,12 @@ struct SettingsView: View {
                     } else {
                         Text("まだ取り込んでいません").foregroundStyle(.secondary)
                     }
-                    Button { picking = true } label: { Label(store.hasCollection ? "取り込み直す…" : "フォルダを取り込む…", systemImage: "folder") }
+                    Button { picking = true } label: {
+                        HStack {
+                            Label(store.hasCollection ? "取り込み直す…" : "フォルダを取り込む…", systemImage: "folder")
+                            if store.loading { Spacer(); ProgressView().controlSize(.small); Text(store.importProgress).font(.footnote).foregroundStyle(.secondary) }
+                        }
+                    }.disabled(store.loading)
                     Text("Mac の ~/Library/Application Support/Anki2/<プロフィール名>/ を iCloud Drive などに写し、そのフォルダを選んでください (collection.anki2 と collection.media が入っているもの)。").font(.footnote).foregroundStyle(.secondary)
                     if let e = store.error { Text(e).font(.footnote).foregroundStyle(.red) }
                 }

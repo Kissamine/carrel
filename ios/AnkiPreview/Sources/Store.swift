@@ -99,44 +99,99 @@ final class Store: ObservableObject {
 
     init() { Task { await load() } }
 
-    /// collection.anki2 と collection.media のあるフォルダを取り込む
+    /// 取り込みの進み具合 (画面に出す)
+    @Published var importProgress = ""
+
+    /// collection.anki2 と collection.media のあるフォルダを取り込む。
+    /// 1 GB を超えることがあるので裏で進め、変わったファイルだけ写す (iCloud の未ダウンロード分はその場で落とす)
     func importFolder(_ url: URL) async {
-        loading = true; error = nil
-        defer { loading = false }
-        let ok = url.startAccessingSecurityScopedResource()
-        defer { if ok { url.stopAccessingSecurityScopedResource() } }
-        let fm = FileManager.default
-        do {
-            // フォルダの中、または選んだものが .anki2 そのもの
-            var src = url
-            if url.pathExtension == "anki2" { src = url.deletingLastPathComponent() }
-            let col = src.appendingPathComponent("collection.anki2")
-            guard fm.fileExists(atPath: col.path) else {
-                throw NSError(domain: "AnkiPreview", code: 3, userInfo: [NSLocalizedDescriptionKey: "collection.anki2 が見つかりません"])
-            }
-            let tmp = Self.dataDir.appendingPathComponent("incoming", isDirectory: true)
-            try? fm.removeItem(at: tmp)
-            try fm.createDirectory(at: tmp, withIntermediateDirectories: true)
-            try fm.copyItem(at: col, to: tmp.appendingPathComponent("collection.anki2"))
-            for side in ["collection.anki2-wal", "collection.anki2-shm"] {
-                let f = src.appendingPathComponent(side)
-                if fm.fileExists(atPath: f.path) { try? fm.copyItem(at: f, to: tmp.appendingPathComponent(side)) }
-            }
-            let media = src.appendingPathComponent("collection.media")
-            if fm.fileExists(atPath: media.path) { try fm.copyItem(at: media, to: tmp.appendingPathComponent("collection.media")) }
-            // 入れ替え
-            for name in ["collection.anki2", "collection.anki2-wal", "collection.anki2-shm", "collection.media"] {
-                try? fm.removeItem(at: Self.dataDir.appendingPathComponent(name))
-                let from = tmp.appendingPathComponent(name)
-                if fm.fileExists(atPath: from.path) { try fm.moveItem(at: from, to: Self.dataDir.appendingPathComponent(name)) }
-            }
-            try? fm.removeItem(at: tmp)
+        loading = true; error = nil; importProgress = "準備しています…"
+        defer { loading = false; importProgress = "" }
+        let dataDir = Self.dataDir, mediaDst = Self.mediaDir, colDst = Self.collectionPath
+        let report: @Sendable (String) -> Void = { text in Task { @MainActor in self.importProgress = text } }
+        let result: Result<Int, Error> = await Task.detached(priority: .userInitiated) {
+            let fm = FileManager.default
+            let ok = url.startAccessingSecurityScopedResource()
+            defer { if ok { url.stopAccessingSecurityScopedResource() } }
+            do {
+                var src = url
+                if url.pathExtension == "anki2" { src = url.deletingLastPathComponent() }
+                let col = src.appendingPathComponent("collection.anki2")
+                guard Self.exists(col) else {
+                    throw NSError(domain: "AnkiPreview", code: 3, userInfo: [NSLocalizedDescriptionKey: "collection.anki2 が見つかりません"])
+                }
+                // コレクション本体 (小さい) は一時ファイルに写してから入れ替える
+                report("カードを写しています…")
+                let tmp = dataDir.appendingPathComponent("collection.incoming")
+                try? fm.removeItem(at: tmp)
+                try Self.copyWithDownload(col, to: tmp)
+                for side in ["collection.anki2-wal", "collection.anki2-shm"] { try? fm.removeItem(at: dataDir.appendingPathComponent(side)) }
+                try? fm.removeItem(at: colDst)
+                try fm.moveItem(at: tmp, to: colDst)
+                // メディアは差分だけ
+                let mediaSrc = src.appendingPathComponent("collection.media")
+                try fm.createDirectory(at: mediaDst, withIntermediateDirectories: true)
+                var copied = 0
+                if Self.exists(mediaSrc) {
+                    let names = (try fm.contentsOfDirectory(atPath: mediaSrc.path)).filter { !$0.hasPrefix(".") }
+                    let have: [String: Int] = Dictionary(uniqueKeysWithValues:
+                        ((try? fm.contentsOfDirectory(atPath: mediaDst.path)) ?? []).map { ($0, Self.size(mediaDst.appendingPathComponent($0))) })
+                    for (i, name) in names.enumerated() {
+                        if i % 20 == 0 { report("メディアを写しています… \(i) / \(names.count)") }
+                        let from = mediaSrc.appendingPathComponent(name)
+                        let to = mediaDst.appendingPathComponent(name)
+                        let srcSize = Self.size(from)
+                        if let had = have[name], had == srcSize, srcSize > 0 { continue }
+                        try? fm.removeItem(at: to)
+                        do { try Self.copyWithDownload(from, to: to); copied += 1 } catch { /* 1 つ失敗しても続ける */ }
+                    }
+                }
+                return .success(copied)
+            } catch { return .failure(error) }
+        }.value
+        switch result {
+        case .success:
             importedAt = Date()
             UserDefaults.standard.set(importedAt, forKey: "importedAt")
             await load()
-        } catch {
-            self.error = error.localizedDescription
+        case .failure(let e):
+            self.error = e.localizedDescription
         }
+    }
+
+    nonisolated private static func exists(_ url: URL) -> Bool {
+        var isDir: ObjCBool = false
+        if FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir) { return true }
+        // iCloud でまだ落ちていない場合は、ダウンロードを頼んでから見直す
+        try? FileManager.default.startDownloadingUbiquitousItem(at: url)
+        return FileManager.default.fileExists(atPath: url.path)
+    }
+
+    nonisolated private static func size(_ url: URL) -> Int {
+        (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+    }
+
+    /// iCloud 上でまだ落ちていないファイルでも、落としてから写す
+    nonisolated private static func copyWithDownload(_ from: URL, to: URL) throws {
+        let fm = FileManager.default
+        var lastError: Error? = nil
+        for attempt in 0..<30 {
+            do {
+                var err: NSError? = nil
+                var inner: Error? = nil
+                NSFileCoordinator().coordinate(readingItemAt: from, options: [], error: &err) { real in
+                    do { try fm.copyItem(at: real, to: to) } catch { inner = error }
+                }
+                if let err { throw err }
+                if let inner { throw inner }
+                return
+            } catch {
+                lastError = error
+                try? fm.startDownloadingUbiquitousItem(at: from)
+                Thread.sleep(forTimeInterval: attempt < 5 ? 0.5 : 2)
+            }
+        }
+        throw lastError ?? NSError(domain: "AnkiPreview", code: 4, userInfo: [NSLocalizedDescriptionKey: "ファイルを写せません"])
     }
 
     func load() async {
