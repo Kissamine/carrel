@@ -413,6 +413,13 @@ struct NoteListView: View {
                 NoteRow(note: note, query: store.query).tag(note.id)
                     // 先頭行の上の線は、タグの帯の下に重なって見えるので消す
                     .listRowSeparator(i == 0 ? .hidden : .visible, edges: .top)
+                    .listRowInsets(EdgeInsets(top: 10, leading: 20, bottom: 10, trailing: 20))
+                    // 選んだカードは macOS 版と同じく角丸の控えめな地で示す
+                    .listRowBackground(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .fill(store.selectedNoteId == note.id ? Color(.secondarySystemFill) : .clear)
+                            .padding(.horizontal, 8).padding(.vertical, 2)
+                    )
             }
         }
         .listStyle(.plain)
@@ -424,14 +431,17 @@ struct NoteListView: View {
         .safeAreaInset(edge: .top, spacing: 0) {
             if !store.allTags.isEmpty {
                 filters
-                    .padding(.vertical, 6)
-                    // 検索バーごと覆う地。上は不透明で、帯の下端で透明になる
+                    .padding(.top, 6).padding(.bottom, 18)
+                    // 検索バーごと覆う地。チップの部分までは不透明で、その下の余白でだけ透明になる
+                    // (一覧をスクロールしたとき、チップと行が重なって読めなくならないように)
                     .background {
-                        LinearGradient(
-                            stops: [.init(color: Color(.systemBackground), location: 0),
-                                    .init(color: Color(.systemBackground).opacity(0.85), location: 0.55),
-                                    .init(color: Color(.systemBackground).opacity(0), location: 1)],
-                            startPoint: .top, endPoint: .bottom)
+                        // 上 (ナビゲーションバーごと) は不透明、いちばん下の 18pt だけ透明に落とす
+                        VStack(spacing: 0) {
+                            Color(.systemBackground)
+                            LinearGradient(colors: [Color(.systemBackground), Color(.systemBackground).opacity(0)],
+                                           startPoint: .top, endPoint: .bottom)
+                                .frame(height: 18)
+                        }
                         .ignoresSafeArea(edges: .top)
                     }
             }
