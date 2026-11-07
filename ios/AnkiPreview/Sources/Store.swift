@@ -353,10 +353,16 @@ final class Store: ObservableObject {
         }
         importedAt = Date()
         UserDefaults.standard.set(importedAt, forKey: "importedAt")
-        // 次回は選び直さずに済むよう、フォルダの場所を覚える
-        if let bm = try? url.bookmarkData() {
+        // 次回は選び直さずに済むよう、フォルダの場所を覚える。
+        // ブックマークは、セキュリティスコープのアクセス中でないと作れない (外で作ると失敗して覚えられなかった)
+        do {
+            let ok = url.startAccessingSecurityScopedResource()
+            defer { if ok { url.stopAccessingSecurityScopedResource() } }
+            let bm = try url.bookmarkData(options: [], includingResourceValuesForKeys: nil, relativeTo: nil)
             UserDefaults.standard.set(bm, forKey: "importBookmark")
             UserDefaults.standard.set(url.lastPathComponent, forKey: "importName")
+        } catch {
+            self.error = "フォルダの場所を覚えられませんでした: " + error.localizedDescription
         }
         // 取り込み元の更新日時。次に開いたとき、これより新しければ自動で取り込み直す
         if let mod = Self.sourceModified(url) { UserDefaults.standard.set(mod, forKey: "importSourceMod") }
