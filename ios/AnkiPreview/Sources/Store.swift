@@ -259,7 +259,7 @@ final class Store: ObservableObject {
             if let sel = selectedNoteId, !notes.contains(where: { $0.id == sel }) { selectedNoteId = nil }
             if let d = selectedDeck, !decks.contains(where: { $0.id == d }) { selectedDeck = nil }
         } catch {
-            self.error = error.localizedDescription
+            self.error = "コレクションを読めません: " + error.localizedDescription
         }
     }
 

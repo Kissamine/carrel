@@ -339,6 +339,15 @@ struct NoteListView: View {
                 } actions: {
                     Button("設定を開く") { showSettings = true }.buttonStyle(.borderedProminent)
                 }
+            } else if store.notes.isEmpty, let e = store.error {
+                // 読み込みに失敗したときは、設定を開かなくても分かるように一覧に出す
+                ContentUnavailableView {
+                    Label("カードを読み込めません", systemImage: "exclamationmark.triangle")
+                } description: {
+                    Text(e)
+                } actions: {
+                    Button("もう一度読み込む") { Task { await store.load() } }.buttonStyle(.borderedProminent)
+                }
             } else if store.filtered.isEmpty {
                 ContentUnavailableView.search(text: store.keyword)
             }

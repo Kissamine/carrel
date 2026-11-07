@@ -6,8 +6,10 @@ final class CollectionDB {
     private var db: OpaquePointer?
 
     init(path: String) throws {
-        // 読み取り専用で開く。WAL のまま書き出されていても読めるように、共有キャッシュは使わない
-        if sqlite3_open_v2(path, &db, SQLITE_OPEN_READONLY, nil) != SQLITE_OK {
+        // 取り込んだ自前のコピーを開く。Anki は WAL 形式で書き出すので、読み取り専用で開くと
+        // 実機では補助ファイル (-shm) を作れず "unable to open database file" になる。
+        // 書き込みはしないが、補助ファイルを作れるよう読み書き可で開く (新規作成はしない)
+        if sqlite3_open_v2(path, &db, SQLITE_OPEN_READWRITE | SQLITE_OPEN_NOMUTEX, nil) != SQLITE_OK {
             let msg = db.map { String(cString: sqlite3_errmsg($0)) } ?? "open に失敗"
             throw NSError(domain: "AnkiPreview", code: 1, userInfo: [NSLocalizedDescriptionKey: msg])
         }
