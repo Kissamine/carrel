@@ -285,6 +285,8 @@ struct StudyView: View {
                             .frame(maxWidth: .infinity, minHeight: 26).padding(.vertical, 6)   // 「答えを見る」と同じ高さ
                     }
                     .buttonStyle(.glass)
+                    // 長押しで次の間隔 ("10分" "4日" など)
+                    .simultaneousGesture(LongPressGesture(minimumDuration: 0.35).onEnded { _ in showTip(Scheduler.preview(card, ease: ease, crt: store.crt)) })
                 }
             }
         }
