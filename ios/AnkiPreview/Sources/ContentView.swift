@@ -502,7 +502,7 @@ struct SettingsView: View {
                 Section {
                     Picker("アプリアイコン", selection: $store.appIcon) {
                         Text("標準").tag("")
-                        Text("水色").tag("CarrelSea")
+                        Text("水色").tag("CarrelBlue")
                     }
                     .onChange(of: store.appIcon) { _, name in store.applyAppIcon(name) }
                 } header: { Text("アイコン") }

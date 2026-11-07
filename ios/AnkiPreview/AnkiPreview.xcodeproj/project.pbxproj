@@ -17,7 +17,7 @@
 		E1533307B3B24D8DB654F0FD /* Protobuf.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68485015D6D5471997614638 /* Protobuf.swift */; };
 		F9F82686C8784DC7B1714977 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 614B9E279DBE4943AC977180 /* Assets.xcassets */; };
 		C1C1C1C1C1C1C1C1C1C1C1C1 /* Carrel.icon in Resources */ = {isa = PBXBuildFile; fileRef = D2D2D2D2D2D2D2D2D2D2D2D2 /* Carrel.icon */; };
-		A5A5A5A5A5A5A5A5A5A5A5A5 /* CarrelSea.icon in Resources */ = {isa = PBXBuildFile; fileRef = B6B6B6B6B6B6B6B6B6B6B6B6 /* CarrelSea.icon */; };
+		A5A5A5A5A5A5A5A5A5A5A5A5 /* CarrelBlue.icon in Resources */ = {isa = PBXBuildFile; fileRef = B6B6B6B6B6B6B6B6B6B6B6B6 /* CarrelBlue.icon */; };
 		FEAE65CCCD354C98977892ED /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF7AF99FA07D42FFAFDE12D9 /* Models.swift */; };
 /* End PBXBuildFile section */
 
@@ -25,7 +25,7 @@
 		4533B98926BA4F0F9296BC7E /* AnkiPreviewApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnkiPreviewApp.swift; sourceTree = "<group>"; };
 		614B9E279DBE4943AC977180 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		D2D2D2D2D2D2D2D2D2D2D2D2 /* Carrel.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = Carrel.icon; sourceTree = "<group>"; };
-		B6B6B6B6B6B6B6B6B6B6B6B6 /* CarrelSea.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = CarrelSea.icon; sourceTree = "<group>"; };
+		B6B6B6B6B6B6B6B6B6B6B6B6 /* CarrelBlue.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = CarrelBlue.icon; sourceTree = "<group>"; };
 		634417D0D49D44E6B932749B /* TemplateRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TemplateRenderer.swift; sourceTree = "<group>"; };
 		68485015D6D5471997614638 /* Protobuf.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Protobuf.swift; sourceTree = "<group>"; };
 		76A6A1ECF8364BC1A58E8280 /* AnkiPreview.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AnkiPreview.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -70,7 +70,7 @@
 				2FF0F07A9D734BED8FEF2E62 /* Sources */,
 				614B9E279DBE4943AC977180 /* Assets.xcassets */,
 				D2D2D2D2D2D2D2D2D2D2D2D2 /* Carrel.icon */,
-				B6B6B6B6B6B6B6B6B6B6B6B6 /* CarrelSea.icon */,
+				B6B6B6B6B6B6B6B6B6B6B6B6 /* CarrelBlue.icon */,
 				7393CA08E1234700A1D5E014 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -144,7 +144,7 @@
 			files = (
 				F9F82686C8784DC7B1714977 /* Assets.xcassets in Resources */,
 				C1C1C1C1C1C1C1C1C1C1C1C1 /* Carrel.icon in Resources */,
-				A5A5A5A5A5A5A5A5A5A5A5A5 /* CarrelSea.icon in Resources */,
+				A5A5A5A5A5A5A5A5A5A5A5A5 /* CarrelBlue.icon in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -210,7 +210,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = Carrel;
-				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = CarrelSea;
+				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = CarrelBlue;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
@@ -249,7 +249,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = Carrel;
-				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = CarrelSea;
+				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = CarrelBlue;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
