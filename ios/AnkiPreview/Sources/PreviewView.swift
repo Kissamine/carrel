@@ -59,6 +59,11 @@ struct PreviewView: UIViewRepresentable {
             // 画像を読めるよう、HTML をメディアと同じ場所に書いてから読み込む
             let file = mediaDir.appendingPathComponent("__preview.html")
             try? FileManager.default.createDirectory(at: mediaDir, withIntermediateDirectories: true)
+            // テンプレートの script が使う jQuery (Anki 本体が用意しているもの) を同じ場所に置く
+            let jq = mediaDir.appendingPathComponent("__jquery.min.js")
+            if !FileManager.default.fileExists(atPath: jq.path), let src = Bundle.main.url(forResource: "jquery", withExtension: "min.js") {
+                try? FileManager.default.copyItem(at: src, to: jq)
+            }
             try? html.write(to: file, atomically: true, encoding: .utf8)
             view.loadFileURL(file, allowingReadAccessTo: mediaDir)
         } else if context.coordinator.lastHighlights != highlights {

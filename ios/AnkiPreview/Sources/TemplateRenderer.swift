@@ -67,10 +67,13 @@ enum TemplateRenderer {
         html.night_mode body, html.night_mode .card { background: \(bg) !important; color: \(fg) !important; }
         html.night_mode a { color: #6EA8FE; }
         """ : ""
+        // テンプレートに script があれば、Anki 本体と同じく jQuery を先に用意する (macOS 版と同じ判断)
+        let libs = body.range(of: "<script", options: .caseInsensitive) != nil ? "<script src=\"__jquery.min.js\"></script>" : ""
         return """
         <!doctype html><html class="\(dark ? "night_mode nightMode" : "")"><head><meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
         <meta name="color-scheme" content="\(dark ? "dark" : "light")">
+        \(libs)
         <style>
         html { font-size: \(Int(100 * textZoom))%; }
         body { margin: 0; padding: 14px 16px calc(14px + env(safe-area-inset-bottom)); background: \(bg); color: \(fg); -webkit-text-size-adjust: 100%; overflow-wrap: break-word; }
