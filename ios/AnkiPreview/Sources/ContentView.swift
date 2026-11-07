@@ -289,33 +289,41 @@ struct LightboxView: View {
     let url: URL
 
     var body: some View {
-        // ボタンは右下に。見開き (Duo を開いた横長の画面) ではサイドバーの右下あたりに。
-        // 幅クラスは畳んだ Duo でも regular になることがあるので、実際の幅で判断する
-        GeometryReader { geo in
-        let wide = geo.size.width > 700
-        ZStack(alignment: wide ? .bottomLeading : .bottomTrailing) {
-            Color.black.ignoresSafeArea()
+        ZStack {
+            Color.black
             if let img = UIImage(contentsOfFile: url.path) {
-                ZoomableImage(image: img).ignoresSafeArea()
+                ZoomableImage(image: img)
             } else {
                 ContentUnavailableView("画像を開けません", systemImage: "photo").foregroundStyle(.white)
             }
-            // 共有と閉じるは Liquid Glass のボタンで
-            HStack(spacing: 10) {
-                ShareLink(item: url) { Image(systemName: "square.and.arrow.up").frame(width: 24, height: 24) }
-                    .buttonStyle(.glass)
-                Button { dismiss() } label: { Image(systemName: "xmark").frame(width: 24, height: 24) }
-                    .buttonStyle(.glass)
-            }
-            .font(.title3.weight(.semibold))
-            .foregroundStyle(.white)
-            .colorScheme(.dark)
-            .padding()
-            .padding(.leading, wide ? max(0, geo.size.width * 0.34 - 112) : 0)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .ignoresSafeArea()
+        .overlay {
+            GeometryReader { geo in
+                // 横長の見開き (Duo を開いて横向き) ではサイドバーの右下あたり、それ以外は画面の右下
+                let wide = geo.size.width > 700 && geo.size.width > geo.size.height
+                buttons
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                    .padding(.trailing, wide ? geo.size.width * 0.66 : 0)
+            }
         }
         .statusBarHidden()
         .onTapGesture { dismiss() }
+    }
+
+    /// 共有と閉じる (Liquid Glass)
+    private var buttons: some View {
+        HStack(spacing: 10) {
+            ShareLink(item: url) { Image(systemName: "square.and.arrow.up").frame(width: 24, height: 24) }
+                .buttonStyle(.glass)
+            Button { dismiss() } label: { Image(systemName: "xmark").frame(width: 24, height: 24) }
+                .buttonStyle(.glass)
+        }
+        .font(.title3.weight(.semibold))
+        .foregroundStyle(.white)
+        .colorScheme(.dark)
+        .padding()
     }
 }
 
