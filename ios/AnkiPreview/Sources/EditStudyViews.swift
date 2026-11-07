@@ -206,13 +206,12 @@ struct StudyView: View {
                 if let card = current, let note = store.notes.first(where: { $0.id == card.noteId }) {
                     let dark = scheme == .dark
                     let bg = store.cardBackground(for: note, dark: dark) ?? Color(.systemBackground)
-                    VStack(spacing: 0) {
-                        PreviewView(html: store.studyHTML(card: card, back: showBack, dark: dark), mediaDir: Store.mediaDir,
-                                    highlights: [], controller: preview,
-                                    onImage: { url in store.lightbox = LightboxItem(url: url) })
-                            .padding(.top, 44)   // 固定のカウンターの下に少し余白をとる
-                        answerBar(card)
-                    }
+                    // ボタンのバーはカードの上に重ねる (地は透明)。カードはバーの下までスクロールでき、Liquid Glass が中身を透かす
+                    PreviewView(html: store.studyHTML(card: card, back: showBack, dark: dark), mediaDir: Store.mediaDir,
+                                highlights: [], controller: preview,
+                                onImage: { url in store.lightbox = LightboxItem(url: url) })
+                        .padding(.top, 44)   // 固定のカウンターの下に少し余白をとる
+                        .safeAreaInset(edge: .bottom, spacing: 0) { answerBar(card) }
                     // カウンター (プレビューの「1 / 114」と同じ見た目)。スクロールしても動かないよう、カードの上に重ねて固定
                     .overlay(alignment: .top) {
                         Text("\(min(done + 1, total)) / \(total)")
