@@ -286,12 +286,13 @@ extension Array {
 
 struct LightboxView: View {
     @Environment(\.dismiss) var dismiss
-    @Environment(\.horizontalSizeClass) private var sizeClass
     let url: URL
 
     var body: some View {
-        // ボタンは右下に。見開き (Duo) ではサイドバーの右下あたりに
-        let wide = sizeClass == .regular
+        // ボタンは右下に。見開き (Duo を開いた横長の画面) ではサイドバーの右下あたりに。
+        // 幅クラスは畳んだ Duo でも regular になることがあるので、実際の幅で判断する
+        GeometryReader { geo in
+        let wide = geo.size.width > 700
         ZStack(alignment: wide ? .bottomLeading : .bottomTrailing) {
             Color.black.ignoresSafeArea()
             if let img = UIImage(contentsOfFile: url.path) {
@@ -310,7 +311,8 @@ struct LightboxView: View {
             .foregroundStyle(.white)
             .colorScheme(.dark)
             .padding()
-            .padding(.leading, wide ? UIScreen.main.bounds.width * 0.34 - 120 : 0)
+            .padding(.leading, wide ? max(0, geo.size.width * 0.34 - 112) : 0)
+        }
         }
         .statusBarHidden()
         .onTapGesture { dismiss() }
