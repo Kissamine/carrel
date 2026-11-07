@@ -86,7 +86,7 @@ struct DetailView: View {
                         .keyboardShortcut(.downArrow, modifiers: [.command])
                     Spacer()
                     if let i = store.selectedIndex {
-                        Text("\(i + 1) / \(store.filtered.count)").font(.footnote).monospacedDigit().foregroundStyle(.secondary).fixedSize()
+                        Text("\(i + 1) / \(store.filtered.count)").font(.footnote).monospacedDigit().foregroundStyle(.secondary).fixedSize().padding(.horizontal, 8)
                     }
                     Spacer()
                     Button { store.pickRandom() } label: { Image(systemName: "shuffle") }
