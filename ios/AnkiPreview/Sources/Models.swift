@@ -10,6 +10,10 @@ struct Note: Identifiable, Hashable {
     /// 全欄の HTML を落とした文章 (検索用)
     let plain: String
     let plainLower: String
+    /// 一覧に出す見出し: 最初の欄からタグを落として、<br> ごとに行に分ける (macOS 版と同じ)
+    let titleLines: [String]
+    /// 名前順の並べ替えに使う鍵 (丸数字を数に直したもの)
+    let sortKey: String
 
     init(id: Int64, notetypeId: Int64, fields: [String], tags: [String], modified: Int64) {
         self.id = id; self.notetypeId = notetypeId; self.fields = fields; self.tags = tags; self.modified = modified
@@ -18,17 +22,30 @@ struct Note: Identifiable, Hashable {
             .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
         plain = p
         plainLower = p.lowercased()
+        let raw = fields.first ?? ""
+        let parts = raw.replacingOccurrences(of: "\n", with: "").components(separatedBy: "<br>")
+        titleLines = parts.map { Note.stripHTML($0) }.filter { !$0.isEmpty }.prefix(3).map { String($0) }
+        sortKey = Note.sortKey(titleLines.joined(separator: " "))
     }
 
     /// 作成日時 (id はミリ秒のタイムスタンプ)
     var created: Date { Date(timeIntervalSince1970: Double(id) / 1000) }
 
-    /// 一覧に出す見出し: 最初の欄からタグを落として、<br> ごとに行に分ける (macOS 版と同じ)
-    var titleLines: [String] {
-        let raw = fields.first ?? ""
-        let parts = raw.replacingOccurrences(of: "\n", with: "")
-            .components(separatedBy: "<br>")
-        return parts.map { Self.stripHTML($0) }.filter { !$0.isEmpty }.prefix(3).map { String($0) }
+
+    static func sortKey(_ text: String) -> String {
+        var out = ""
+        for ch in text.unicodeScalars {
+            let c = Int(ch.value)
+            var n: Int? = nil
+            if c >= 0x2460 && c <= 0x2473 { n = c - 0x2460 + 1 }
+            else if c >= 0x3251 && c <= 0x325F { n = c - 0x3251 + 21 }
+            else if c >= 0x32B1 && c <= 0x32BF { n = c - 0x32B1 + 36 }
+            else if c >= 0x2776 && c <= 0x277F { n = c - 0x2776 + 1 }
+            else if c >= 0x24EB && c <= 0x24F4 { n = c - 0x24EB + 11 }
+            else if c == 0x24EA || c == 0x24FF { n = 0 }
+            if let n { out += String(format: "%03d", n) } else { out.unicodeScalars.append(ch) }
+        }
+        return out
     }
 
     static func stripHTML(_ s: String) -> String {

@@ -46,18 +46,26 @@ final class Store: ObservableObject {
     @Published var crt: Int64 = 0
     // 検索条件は次に開いたときも残す (macOS 版と同じ)
     @Published var keyword = UserDefaults.standard.string(forKey: "lastKeyword") ?? "" {
-        didSet { UserDefaults.standard.set(keyword, forKey: "lastKeyword") }
+        didSet { UserDefaults.standard.set(keyword, forKey: "lastKeyword"); query = SearchQuery.parse(keyword); refilter() }
     }
     @Published var selectedTags: Set<String> = Set(UserDefaults.standard.stringArray(forKey: "lastTags") ?? []) {
-        didSet { UserDefaults.standard.set(Array(selectedTags), forKey: "lastTags") }
+        didSet { UserDefaults.standard.set(Array(selectedTags), forKey: "lastTags"); refilter() }
     }
     @Published var selectedDeck: Int64? = Int64(UserDefaults.standard.string(forKey: "defaultDeck") ?? "") {
-        didSet { UserDefaults.standard.set(selectedDeck.map(String.init) ?? "", forKey: "defaultDeck") }
+        didSet { UserDefaults.standard.set(selectedDeck.map(String.init) ?? "", forKey: "defaultDeck"); refilter() }
     }
     /// 学習状況での絞り込み: all / due / new / review / suspended / flagged
     @Published var statusFilter = UserDefaults.standard.string(forKey: "statusFilter") ?? "all" {
-        didSet { UserDefaults.standard.set(statusFilter, forKey: "statusFilter") }
+        didSet { UserDefaults.standard.set(statusFilter, forKey: "statusFilter"); refilter() }
     }
+    @Published var sortMode: String = UserDefaults.standard.string(forKey: "sortMode") ?? "name" {
+        didSet { UserDefaults.standard.set(sortMode, forKey: "sortMode"); refilter() }
+    }
+    /// 絞り込み・並べ替えの結果。条件やデータが変わったときだけ計算し直す
+    /// (画面が描き直されるたびに 1,000 件を並べ替えていると、取り込み中などに操作できないほど重くなる)
+    @Published private(set) var filtered: [Note] = []
+    @Published private(set) var allTags: [(String, Int)] = []
+    @Published private(set) var query = SearchQuery.parse(UserDefaults.standard.string(forKey: "lastKeyword") ?? "")
     /// 選んでいるカード (次に開いたときも同じカードに戻る)
     @Published var selectedNoteId: Int64? = {
         let v = UserDefaults.standard.string(forKey: "selectedNoteId") ?? ""
@@ -77,7 +85,6 @@ final class Store: ObservableObject {
     @Published var importedAt: Date? = UserDefaults.standard.object(forKey: "importedAt") as? Date
 
     @AppStorage("textZoom") var textZoom: Double = 1.0
-    @AppStorage("sortMode") var sortMode: String = "name"
     /// 表示する面: front / back
     @AppStorage("side") var side: String = "back"
     @AppStorage("showTagsInList") var showTagsInList: Bool = true
@@ -177,7 +184,10 @@ final class Store: ObservableObject {
                 ((try? fm.contentsOfDirectory(atPath: mediaDst.path)) ?? []).map { ($0, Self.size(mediaDst.appendingPathComponent($0))) })
             var copied = 0, missing = 0
             for (i, name) in list.enumerated() {
-                report("メディアを写しています… \(i + 1) / \(list.count)" + (missing > 0 ? " (未ダウンロード \(missing))" : ""))
+                // 画面の更新は 20 件ごとに (1 件ごとに描き直すと操作が重くなる)
+                if i % 20 == 0 || i == list.count - 1 {
+                    report("メディアを写しています… \(i + 1) / \(list.count)" + (missing > 0 ? " (未ダウンロード \(missing))" : ""))
+                }
                 let from = mediaSrc.appendingPathComponent(name)
                 let to = mediaDst.appendingPathComponent(name)
                 let srcSize = Self.size(from)
@@ -258,6 +268,10 @@ final class Store: ObservableObject {
             decks = result.2.filter { $0.name != "Default" || nd.values.contains($0.id) }
             if let sel = selectedNoteId, !notes.contains(where: { $0.id == sel }) { selectedNoteId = nil }
             if let d = selectedDeck, !decks.contains(where: { $0.id == d }) { selectedDeck = nil }
+            var count: [String: Int] = [:]
+            for n in notes { for t in n.tags { count[t, default: 0] += 1 } }
+            allTags = count.sorted { $0.value != $1.value ? $0.value > $1.value : $0.key < $1.key }
+            refilter()
         } catch {
             self.error = "コレクションを読めません: " + error.localizedDescription
         }
@@ -310,13 +324,6 @@ final class Store: ObservableObject {
 
     // ---- 絞り込み ----
 
-    var allTags: [(String, Int)] {
-        var count: [String: Int] = [:]
-        for n in notes { for t in n.tags { count[t, default: 0] += 1 } }
-        return count.sorted { $0.value != $1.value ? $0.value > $1.value : $0.key < $1.key }
-    }
-
-    var query: SearchQuery { SearchQuery.parse(keyword) }
 
     /// ハイライトする語 (検索欄の語 + カード内検索)
     var highlightTerms: [String] {
@@ -352,7 +359,7 @@ final class Store: ObservableObject {
         }
     }
 
-    var filtered: [Note] {
+    func refilter() {
         let q = query
         var list = notes.filter { n in
             if let d = selectedDeck, noteDecks[n.id] != d { return false }
@@ -371,9 +378,9 @@ final class Store: ObservableObject {
         case "lapses":
             list.sort { (cards[$0.id] ?? []).reduce(0) { $0 + $1.lapses } > (cards[$1.id] ?? []).reduce(0) { $0 + $1.lapses } }
         default:
-            list.sort { Self.sortKey($0.titleLines.joined(separator: " ")) < Self.sortKey($1.titleLines.joined(separator: " ")) }
+            list.sort { $0.sortKey < $1.sortKey }
         }
-        return list
+        filtered = list
     }
 
     var hasActiveFilter: Bool { selectedDeck != nil || !selectedTags.isEmpty || statusFilter != "all" }
@@ -381,21 +388,6 @@ final class Store: ObservableObject {
     func clearFilters() { selectedDeck = nil; selectedTags = []; statusFilter = "all"; keyword = "" }
 
     /// 並べ替え用: 丸数字を 3 桁の数字に直す (macOS 版と同じ)
-    static func sortKey(_ text: String) -> String {
-        var out = ""
-        for ch in text.unicodeScalars {
-            let c = Int(ch.value)
-            var n: Int? = nil
-            if c >= 0x2460 && c <= 0x2473 { n = c - 0x2460 + 1 }
-            else if c >= 0x3251 && c <= 0x325F { n = c - 0x3251 + 21 }
-            else if c >= 0x32B1 && c <= 0x32BF { n = c - 0x32B1 + 36 }
-            else if c >= 0x2776 && c <= 0x277F { n = c - 0x2776 + 1 }
-            else if c >= 0x24EB && c <= 0x24F4 { n = c - 0x24EB + 11 }
-            else if c == 0x24EA || c == 0x24FF { n = 0 }
-            if let n { out += String(format: "%03d", n) } else { out.unicodeScalars.append(ch) }
-        }
-        return out
-    }
 
     var selectedNote: Note? { notes.first { $0.id == selectedNoteId } }
 
