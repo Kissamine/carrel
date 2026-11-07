@@ -63,9 +63,6 @@ html, body {
   background: var(--bg);
 }
 
-/* 検索バーの上のロゴ (Savoye の輪郭をそのまま埋め込んだ SVG) */
-.logo-row { flex: 0 0 auto; padding: 12px 10px 8px 18px; -webkit-app-region: drag; }
-.logo-row .logo { height: 20px; width: auto; display: block; color: #fff; }
 .search-row { flex: 0 0 auto; display: flex; align-items: center; gap: 6px; padding: 8px 14px 0 18px; }  /* 左端はカードの文字 (8+10px) にそろえる */
 .search {
   flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 6px;   /* 一覧の幅に合わせて縮み、＋ は右端に残る */

@@ -281,22 +281,85 @@ app.whenReady().then(async () => {
   // 先に窓を出しておき、問い合わせの方を待たせる
   const { webContents } = require('electron');
   const focusedContents = (fn) => { const c = webContents.getFocusedWebContents(); if (c) fn(c); };
-  // 編集メニュー。macOS では ⌘C / ⌘V / ⌘A がここ経由で届く (プレビューの中でも効くように)
-  Menu.setApplicationMenu(Menu.buildFromTemplate([
-    { role: 'appMenu' },
-    { label: '編集', submenu: [
-      { role: 'undo', label: '取り消す' }, { role: 'redo', label: 'やり直す' }, { type: 'separator' },
-      // 役割 (role) のままだと、焦点がプレビュー (webview) にあるとき親の窓に効いてしまい、
-      // 1 回目の ⌘C が空振りする。いま焦点のある中身に直接かける
-      { label: 'カット', accelerator: 'CmdOrCtrl+X', click: () => focusedContents((c) => c.cut()) },
-      { label: 'コピー', accelerator: 'CmdOrCtrl+C', click: () => focusedContents((c) => c.copy()) },
-      { label: 'ペースト', accelerator: 'CmdOrCtrl+V', click: () => focusedContents((c) => c.paste()) },
-      { label: 'ペーストしてスタイルを合わせる', accelerator: 'CmdOrCtrl+Shift+V', click: () => focusedContents((c) => c.pasteAndMatchStyle()) },
-      { label: 'すべてを選択', accelerator: 'CmdOrCtrl+A', click: () => focusedContents((c) => c.selectAll()) },
-    ] },
-    { label: '表示', submenu: [{ role: 'togglefullscreen', label: 'フルスクリーン' }] },
-    { role: 'windowMenu', label: 'ウインドウ' },
-  ]));
+  // メニューバー。画面側の操作は 'menu' で画面へ送る。ショートカットは設定の割り当てに追従する
+  const send = (action) => () => { if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('menu', action); };
+  const toAccel = (k) => (k ? k.replace(/\bMod\b/, 'CmdOrCtrl').replace(/\bAlt\b/, 'Option') : undefined);
+  function buildMenu(keys = {}) {
+    const k = (name) => toAccel(keys[name]);
+    Menu.setApplicationMenu(Menu.buildFromTemplate([
+      { label: 'Carrel', submenu: [
+        { role: 'about', label: 'Carrel について' },
+        { type: 'separator' },
+        { label: '設定…', accelerator: k('settings') || 'CmdOrCtrl+,', click: send('settings') },
+        { type: 'separator' },
+        { role: 'services', label: 'サービス' },
+        { type: 'separator' },
+        { role: 'hide', label: 'Carrel を隠す' },
+        { role: 'hideOthers', label: 'ほかを隠す' },
+        { role: 'unhide', label: 'すべてを表示' },
+        { type: 'separator' },
+        { role: 'quit', label: 'Carrel を終了' },
+      ] },
+      { label: 'ファイル', submenu: [
+        { label: '新しいノート…', accelerator: 'CmdOrCtrl+N', click: send('addNote') },
+        { label: '保存', accelerator: k('save') || 'CmdOrCtrl+S', click: send('save') },
+        { type: 'separator' },
+        { label: 'Anki を開いて同期', accelerator: k('sync') || 'CmdOrCtrl+R', click: send('sync') },
+        { type: 'separator' },
+        { label: 'バックアップを作成…', click: send('backup') },
+        { label: 'コレクションのフォルダを Finder で表示', click: () => { const p = collectionPath(); if (p) shell.showItemInFolder(p); } },
+        { type: 'separator' },
+        { role: 'close', label: 'ウインドウを閉じる' },
+      ] },
+      { label: '編集', submenu: [
+        { role: 'undo', label: '取り消す' }, { role: 'redo', label: 'やり直す' }, { type: 'separator' },
+        // 役割 (role) のままだと、焦点がプレビュー (webview) にあるとき親の窓に効いてしまい、
+        // 1 回目の ⌘C が空振りする。いま焦点のある中身に直接かける
+        { label: 'カット', accelerator: 'CmdOrCtrl+X', click: () => focusedContents((c) => c.cut()) },
+        { label: 'コピー', accelerator: 'CmdOrCtrl+C', click: () => focusedContents((c) => c.copy()) },
+        { label: 'ペースト', accelerator: 'CmdOrCtrl+V', click: () => focusedContents((c) => c.paste()) },
+        { label: 'ペーストしてスタイルを合わせる', accelerator: 'CmdOrCtrl+Shift+V', click: () => focusedContents((c) => c.pasteAndMatchStyle()) },
+        { label: 'すべてを選択', accelerator: 'CmdOrCtrl+A', click: () => focusedContents((c) => c.selectAll()) },
+        { type: 'separator' },
+        { label: 'カード内を検索…', accelerator: k('find') || 'CmdOrCtrl+F', click: send('find') },
+        { label: '検索と置換…', click: send('replace') },
+        { type: 'separator' },
+        { label: 'スペルと文法', submenu: [
+          { role: 'toggleSpellChecker', label: '入力中にスペルチェック' },
+        ] },
+        { label: '音声入力を開始', role: 'startSpeaking' },
+        { label: '読み上げを停止', role: 'stopSpeaking' },
+      ] },
+      { label: '表示', submenu: [
+        { label: '一覧を表示 / 隠す', accelerator: k('toggleList') || 'CmdOrCtrl+B', click: send('toggleList') },
+        { label: 'エディタを開く / 閉じる', accelerator: k('edit') || 'CmdOrCtrl+E', click: send('edit') },
+        { type: 'separator' },
+        { label: 'カードを再読み込み', accelerator: 'CmdOrCtrl+Shift+R', click: send('reload') },
+        { type: 'separator' },
+        { role: 'togglefullscreen', label: 'フルスクリーンにする' },
+        { type: 'separator' },
+        { label: '開発者ツール', accelerator: 'Alt+CmdOrCtrl+I', click: () => focusedContents((c) => c.toggleDevTools()) },
+      ] },
+      { label: 'ウインドウ', submenu: [
+        { role: 'minimize', label: 'しまう' },
+        { role: 'zoom', label: '拡大 / 縮小' },
+        { type: 'separator' },
+        { role: 'front', label: 'すべてを手前に移動' },
+      ] },
+      { label: 'ヘルプ', submenu: [
+        { label: '使い方 (README)', click: () => shell.openExternal('https://github.com/Kissamine/carrel#readme') },
+        { label: 'Carrel の GitHub ページ', click: () => shell.openExternal('https://github.com/Kissamine/carrel') },
+        { label: '問題を報告…', click: () => shell.openExternal('https://github.com/Kissamine/carrel/issues') },
+        { type: 'separator' },
+        { label: 'Anki のマニュアル', click: () => shell.openExternal('https://docs.ankiweb.net/') },
+        { type: 'separator' },
+        { label: 'ショートカットの設定…', click: send('keys') },
+      ] },
+    ]));
+  }
+  buildMenu();
+  // 画面側がショートカットの割り当てを知らせてきたら、メニューの表示も合わせる
+  ipcMain.handle('menu:keys', (_e, keys) => { buildMenu(keys || {}); });
   mark('アプリの準備ができた');
   const win0 = createWindow();
   win0.once('ready-to-show', () => mark('窓が出せる状態'));

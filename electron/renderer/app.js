@@ -3592,6 +3592,19 @@ async function boot() {
     settings: () => el('settings').click(),
     save: () => save(),
   };
+  // メニューバーからの操作
+  window.anki.onMenu(async (name) => {
+    if (actions[name]) { actions[name](); return; }
+    if (name === 'addNote') openAddDialog();
+    else if (name === 'backup') openSettings(settingsCtx('backup'));
+    else if (name === 'keys') openSettings(settingsCtx('keys'));
+    else if (name === 'replace') { if (!state.editing) await openEditor(); const b = el('replaceOpen'); if (b) b.click(); }
+    else if (name === 'reload') { await refreshAll(); if (state.selected) await select(state.selected); }
+  });
+  // メニューに出すショートカットは、設定の割り当てに合わせる
+  const pushMenuKeys = () => window.anki.menuKeys(currentKeys());
+  pushMenuKeys();
+  window.addEventListener('anki-keys-changed', pushMenuKeys);
   window.addEventListener('keydown', (e) => {
     if (window.__noShortcuts) return;      // 調べもの用
     // 設定を開いている間は、カード向けのショートカット (保存など) を効かせない

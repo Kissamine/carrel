@@ -2,19 +2,20 @@
 
 <img src="electron/build/icon.png" width="96" alt="Carrel">
 
-**Carrel** は Anki 互換のフラッシュカード編集アプリ (macOS) です。
-カードの検索・編集・プレビューに特化し、AnkiWeb と同期できます。
-Anki そのものを置き換えるのではなく、Anki と同じコレクションを「書きやすい机」で編集するためのツールです。
+**Carrel** は、デスクトップ版 [Anki](https://apps.ankiweb.net/) のカードを編集するための補助アプリ (macOS) です。
+カードの検索・編集・プレビューに特化していて、Anki が終了している間に Anki のコレクションを直接開いて編集します。
+Anki を置き換えるものではなく、Anki と組み合わせて使う「書きやすい机」です。
 
-> Anki は Ankitects Pty Ltd の商標です。Carrel は Ankitects とは無関係の個人プロジェクトです。
+> Anki は Ankitects Pty Ltd の商標です。Carrel は Ankitects とは無関係の個人プロジェクトで、Ankitects の承認や保証を受けたものではありません。
+> Carrel は AnkiWeb に接続しません。AnkiWeb との同期は、Anki 本体 (承認されたクライアント) で行ってください。
 
 ## 主な機能
 
 - **検索と一覧**: Anki の検索構文、タグ・デッキでの絞り込み、丸数字を正しく並べる並べ替え
 - **HTML エディタ**: 構文色付け、折りたたみ、タグの対応ハイライト、検索と置換 (このノート / すべてのノート)、自動閉じタグ、画像のペースト
 - **ライブプレビュー**: ノートタイプの CSS とテンプレートをそのまま適用。画像のライトボックス、カード内検索
-- **Anki 本体と同じコレクション**: Anki のプロフィールを直接開いて編集する。AnkiWeb との同期は Anki 本体で行う (Carrel は AnkiWeb に接続しない)
-- **AI 支援 (任意)**: Claude / ChatGPT / Gemini の API キーを入れると、カードの書き換え・整形を依頼できる。キーは自分で用意する
+- **Anki 本体と同じコレクション**: Anki のプロフィールを直接開いて編集する。Carrel 自身はネットワークに接続せず、AnkiWeb との同期は Anki 本体に任せる
+- **AI 支援 (任意)**: Claude / ChatGPT / Gemini の API キーを入れると、カードの書き換え・整形を依頼できる。キーは自分で用意し、送信されるのは依頼したカードの本文だけ (使わなければ Carrel は外部に通信しない)
 - **テンプレート編集・メディア整理・スニペット**
 
 ## インストール
@@ -40,11 +41,16 @@ Carrel.app を Applications に入れてください。Apple Silicon (M1 以降)
 1. Mac に [Anki](https://apps.ankiweb.net/) を入れて一度起動し、AnkiWeb と同期しておきます
 2. Anki を終了して Carrel を開くと、Anki のプロフィール (`~/Library/Application Support/Anki2/<名前>/`) のカードが一覧に出ます。プロフィールが複数あるときは 設定 › Anki で選びます
 3. 左の一覧からカードを選ぶと右にプレビューが出ます。鉛筆アイコンで編集に入り、⌘S で保存します
-4. AnkiWeb に送るときは右上の同期ボタンを押します。Carrel がコレクションを手放して Anki を開くので、Anki の同期ボタンを押してください
+4. 変更を AnkiWeb に送るときは右上の「Anki を開いて同期」ボタンを押します。Carrel がコレクションを手放して Anki を開くので、Anki の同期ボタンを押してください (同期は常に Anki 本体が行います)
 5. Anki を起動している間、Carrel は待機します (Anki を終了すると自動で再開)。Carrel の窓が裏に回ったときもコレクションを手放すので、Anki をいつでも開けます
 
 Carrel 自身の設定やバックアップは `~/Library/Application Support/Carrel/` に置かれます。
-AnkiWeb の利用規約は第三者クライアントの接続を認めていないため、Carrel は AnkiWeb に直接接続しません。
+
+### AnkiWeb について
+
+AnkiWeb の利用規約は、承認されたクライアント (Anki、AnkiMobile、AnkiDroid、AnkiUniversal) 以外からの接続を認めていません。
+Carrel はこれに従い、AnkiWeb に一切接続しません。Carrel が行うのは Mac 上のコレクションファイルの読み書きだけで、
+AnkiWeb とのやり取りは Anki 本体で行ってください。
 
 ## ソースからビルドする
 

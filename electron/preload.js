@@ -48,4 +48,6 @@ contextBridge.exposeInMainWorld('anki', {
   ankiLaunch: () => ipcRenderer.invoke('anki:launch'),
   onWindowBlur: (fn) => ipcRenderer.on('window-blur', () => fn()),
   onWindowFocus: (fn) => ipcRenderer.on('window-focus', () => fn()),
+  onMenu: (fn) => ipcRenderer.on('menu', (_e, action) => fn(action)),
+  menuKeys: (keys) => ipcRenderer.invoke('menu:keys', keys),
 });
