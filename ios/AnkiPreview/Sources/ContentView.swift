@@ -427,7 +427,7 @@ struct NoteListView: View {
                 ToolbarItem(placement: .topBarTrailing) { optionsMenu }
             }
             ToolbarItem(placement: .status) {
-                Text("\(store.filtered.count) 件").font(.footnote).foregroundStyle(.secondary).fixedSize()
+                Text("\(store.filtered.count) 件").font(.footnote).foregroundStyle(.secondary).fixedSize().padding(.horizontal, 8)
             }
             if wide {
                 ToolbarItem(placement: .bottomBar) { optionsMenu }
