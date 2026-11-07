@@ -43,4 +43,9 @@ contextBridge.exposeInMainWorld('anki', {
   setWindowMaxWidth: (width) => ipcRenderer.invoke('window:maxWidth', width),
   adjustWindowLeft: (delta) => ipcRenderer.invoke('window:adjustLeft', delta),
   settingsSet: (key, value) => ipcRenderer.invoke('settings:set', key, value),
+  ankiStatus: () => ipcRenderer.invoke('anki:status'),
+  ankiSetProfile: (name) => ipcRenderer.invoke('anki:setProfile', name),
+  ankiLaunch: () => ipcRenderer.invoke('anki:launch'),
+  onWindowBlur: (fn) => ipcRenderer.on('window-blur', () => fn()),
+  onWindowFocus: (fn) => ipcRenderer.on('window-focus', () => fn()),
 });

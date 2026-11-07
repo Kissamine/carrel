@@ -11,7 +11,6 @@
 		17AD417793584692A10E1032 /* CollectionDB.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABB866C9B5C74E83B59D6CE6 /* CollectionDB.swift */; };
 		5D877987EDC6404B8DF3D5F4 /* Store.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF6794E44BE041CC98904916 /* Store.swift */; };
 		85E6BECD9B5A4E2988A62E45 /* PreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEF00138DF344BE3961D6087 /* PreviewView.swift */; };
-		A1B2C3D4E5F60718293A4B5C /* AnkiWebSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2C3D4E5F60718293A4B5C6D /* AnkiWebSync.swift */; };
 		E3E3E3E3E3E3E3E3E3E3E3E3 /* CarrelLogo.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4F4F4F4F4F4F4F4F4F4F4F4 /* CarrelLogo.swift */; };
 		B4ABD1C54EAA4AAF82398AE3 /* AnkiPreviewApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4533B98926BA4F0F9296BC7E /* AnkiPreviewApp.swift */; };
 		DC5D6149B3CA4C2B910B5612 /* TemplateRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 634417D0D49D44E6B932749B /* TemplateRenderer.swift */; };
@@ -31,7 +30,6 @@
 		ABB866C9B5C74E83B59D6CE6 /* CollectionDB.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CollectionDB.swift; sourceTree = "<group>"; };
 		AF6794E44BE041CC98904916 /* Store.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Store.swift; sourceTree = "<group>"; };
 		AF7AF99FA07D42FFAFDE12D9 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
-		B2C3D4E5F60718293A4B5C6D /* AnkiWebSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnkiWebSync.swift; sourceTree = "<group>"; };
 		F4F4F4F4F4F4F4F4F4F4F4F4 /* CarrelLogo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarrelLogo.swift; sourceTree = "<group>"; };
 		B593FFFBACDA4D21B99D5E4B /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		DEF00138DF344BE3961D6087 /* PreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewView.swift; sourceTree = "<group>"; };
@@ -58,7 +56,6 @@
 				DEF00138DF344BE3961D6087 /* PreviewView.swift */,
 				68485015D6D5471997614638 /* Protobuf.swift */,
 				AF6794E44BE041CC98904916 /* Store.swift */,
-				B2C3D4E5F60718293A4B5C6D /* AnkiWebSync.swift */,
 				F4F4F4F4F4F4F4F4F4F4F4F4 /* CarrelLogo.swift */,
 				634417D0D49D44E6B932749B /* TemplateRenderer.swift */,
 			);
@@ -161,7 +158,6 @@
 				85E6BECD9B5A4E2988A62E45 /* PreviewView.swift in Sources */,
 				E1533307B3B24D8DB654F0FD /* Protobuf.swift in Sources */,
 				5D877987EDC6404B8DF3D5F4 /* Store.swift in Sources */,
-				A1B2C3D4E5F60718293A4B5C /* AnkiWebSync.swift in Sources */,
 				E3E3E3E3E3E3E3E3E3E3E3E3 /* CarrelLogo.swift in Sources */,
 				DC5D6149B3CA4C2B910B5612 /* TemplateRenderer.swift in Sources */,
 			);

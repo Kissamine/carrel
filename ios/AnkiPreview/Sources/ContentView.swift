@@ -101,7 +101,7 @@ struct DetailView: View {
             ContentUnavailableView {
                 Label("コレクションがありません", systemImage: "tray.and.arrow.down")
             } description: {
-                Text("設定で AnkiWeb にログインして同期してください。")
+                Text("設定から、Anki のプロフィールのフォルダ (collection.anki2 と collection.media) を取り込んでください。")
             } actions: {
                 Button("設定を開く") { showSettings = true }.buttonStyle(.borderedProminent)
             }
@@ -295,9 +295,6 @@ struct NoteListView: View {
                     }
                     Divider()
                     Button { store.pickRandom() } label: { Label("ランダムに開く", systemImage: "shuffle") }
-                    if store.loggedIn {
-                        Button { Task { await store.sync() } } label: { Label("AnkiWeb と同期", systemImage: "arrow.triangle.2.circlepath") }.disabled(store.syncing)
-                    }
                     if store.hasActiveFilter {
                         Button { store.clearFilters() } label: { Label("絞り込みを解除", systemImage: "xmark.circle") }
                     }
@@ -309,25 +306,13 @@ struct NoteListView: View {
                 Text("\(store.filtered.count) 件").font(.footnote).foregroundStyle(.secondary).fixedSize()
             }
         }
-        .refreshable { if store.loggedIn { await store.sync() } }
-        .safeAreaInset(edge: .bottom) {
-            if store.syncing {
-                HStack(spacing: 8) {
-                    ProgressView().controlSize(.small)
-                    Text(store.syncStatus).font(.footnote).foregroundStyle(.secondary)
-                }
-                .padding(.horizontal, 14).padding(.vertical, 8)
-                .background(.bar, in: Capsule())
-                .padding(.bottom, 6)
-            }
-        }
         .overlay {
             if store.loading { ProgressView().controlSize(.large) }
             else if !store.hasCollection {
                 ContentUnavailableView {
                     Label("コレクションがありません", systemImage: "tray.and.arrow.down")
                 } description: {
-                    Text("設定で AnkiWeb にログインして同期してください。")
+                    Text("設定から、Anki のプロフィールのフォルダ (collection.anki2 と collection.media) を取り込んでください。")
                 } actions: {
                     Button("設定を開く") { showSettings = true }.buttonStyle(.borderedProminent)
                 }
@@ -446,45 +431,10 @@ struct SettingsView: View {
     @EnvironmentObject var store: Store
     @Environment(\.dismiss) var dismiss
     @State private var picking = false
-    @State private var user = ""
-    @State private var password = ""
-    @State private var loggingIn = false
-    @State private var loginError: String? = nil
 
     var body: some View {
         NavigationStack {
             Form {
-                Section {
-                    if store.loggedIn {
-                        LabeledContent("アカウント", value: store.ankiwebUser)
-                        if let at = store.lastSync { LabeledContent("前回の同期", value: at.formatted(date: .abbreviated, time: .shortened)) }
-                        Button {
-                            Task { await store.sync() }
-                        } label: {
-                            HStack {
-                                Label("今すぐ同期", systemImage: "arrow.triangle.2.circlepath")
-                                if store.syncing { Spacer(); ProgressView().controlSize(.small); Text(store.syncStatus).font(.footnote).foregroundStyle(.secondary) }
-                            }
-                        }.disabled(store.syncing)
-                        Button("ログアウト", role: .destructive) { store.ankiwebLogout() }
-                    } else {
-                        TextField("メールアドレス", text: $user).textContentType(.username).keyboardType(.emailAddress).autocapitalization(.none).autocorrectionDisabled()
-                        SecureField("パスワード", text: $password).textContentType(.password)
-                        Button {
-                            loggingIn = true; loginError = nil
-                            Task {
-                                do { try await store.ankiwebLogin(username: user.trimmingCharacters(in: .whitespaces), password: password); password = "" }
-                                catch { loginError = error.localizedDescription }
-                                loggingIn = false
-                            }
-                        } label: {
-                            HStack { Text("ログイン"); if loggingIn { Spacer(); ProgressView().controlSize(.small) } }
-                        }.disabled(user.isEmpty || password.isEmpty || loggingIn)
-                        if let e = loginError { Text(e).font(.footnote).foregroundStyle(.red) }
-                    }
-                } header: { Text("AnkiWeb") } footer: {
-                    Text("AnkiWeb からカードとメディアを受け取ります。この iPhone からは何も送らないので、Anki 側の学習記録は変わりません。パスワードは保存しません。")
-                }
                 Section("コレクション") {
                     if store.hasCollection {
                         if let at = store.importedAt { LabeledContent("取り込み", value: at.formatted(date: .abbreviated, time: .shortened)) }
@@ -494,7 +444,7 @@ struct SettingsView: View {
                         Text("まだ取り込んでいません").foregroundStyle(.secondary)
                     }
                     Button { picking = true } label: { Label(store.hasCollection ? "取り込み直す…" : "フォルダを取り込む…", systemImage: "folder") }
-                    Text("collection.anki2 と collection.media が入ったフォルダ (Anki のバックアップなど) を直接読み込むこともできます。").font(.footnote).foregroundStyle(.secondary)
+                    Text("Mac の ~/Library/Application Support/Anki2/<プロフィール名>/ を iCloud Drive などに写し、そのフォルダを選んでください (collection.anki2 と collection.media が入っているもの)。").font(.footnote).foregroundStyle(.secondary)
                     if let e = store.error { Text(e).font(.footnote).foregroundStyle(.red) }
                 }
                 Section("表示") {

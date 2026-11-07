@@ -6,8 +6,8 @@ import { DEFAULT_KEYS, KEY_LABELS, currentKeys, keyOf, refreshTitlebarTips } fro
 
 // keywords は設定内検索のための手がかり
 const SECTIONS = [
-  { id: 'account', title: 'アカウント',
-    keywords: 'AnkiWeb ログイン ログアウト 同期 アカウント メール パスワード' },
+  { id: 'anki', title: 'Anki',
+    keywords: 'Anki プロフィール コレクション 同期 AnkiWeb 場所 本体' },
   { id: 'search', title: '検索',
     keywords: 'デッキ 並び順 ソート 読み込み 件数 起動時 関連順 名前順 更新順' },
   { id: 'tags', title: 'よく使うタグ',
@@ -75,7 +75,7 @@ export function openSettings(ctx) {
     const h = document.createElement('h3');
     h.textContent = section.title;
     detail.appendChild(h);
-    if (current === 'account') await accountPane(detail, ctx);
+    if (current === 'anki') await ankiPane(detail, ctx);
     if (current === 'search') await searchPane(detail, ctx);
     if (current === 'tags') tagsPane(detail, ctx);
     if (current === 'keys') keysPane(detail, ctx);
@@ -118,7 +118,44 @@ function row(parent, hint) {
   return box;
 }
 
-async function accountPane(detail, ctx) {
+async function ankiPane(detail, ctx) {
+  const st = await ctx.ankiStatus();
+  const box = row(detail, 'Carrel は Anki 本体のプロフィールを直接開いて編集します。AnkiWeb との同期は Anki 本体で行ってください');
+  if (!st.profiles.length) {
+    const none = document.createElement('div');
+    none.className = 'hint';
+    none.textContent = 'プロフィールが見つかりません。Anki をインストールして一度起動してください (~/Library/Application Support/Anki2)';
+    box.appendChild(none);
+    return;
+  }
+  const sel = document.createElement('select');
+  sel.innerHTML = st.profiles.map(() => '<option></option>').join('');
+  [...sel.options].forEach((o, i) => { o.value = st.profiles[i]; o.textContent = st.profiles[i]; });
+  sel.value = st.profile || st.profiles[0];
+  sel.onchange = async () => {
+    await ctx.ankiSetProfile(sel.value);
+    ctx.toast('プロフィールを ' + sel.value + ' にしました');
+    await ctx.refreshLogin();
+    ctx.reload();
+  };
+  const where = document.createElement('div');
+  where.className = 'hint';
+  where.style.marginTop = '8px';
+  where.textContent = st.path || '';
+  const state = document.createElement('div');
+  state.className = 'hint';
+  state.textContent = st.running
+    ? 'Anki が起動中です。Anki を終了すると Carrel が編集を再開します'
+    : 'Anki は終了しています (Carrel が編集できます)';
+  const open = document.createElement('button');
+  open.className = 'pill';
+  open.textContent = 'Anki を開いて同期する';
+  open.style.marginTop = '10px';
+  open.onclick = () => { ctx.sync(); };
+  box.append(sel, where, state, open);
+}
+
+async function accountPaneLegacy(detail, ctx) {
   const stored = prefs.getItem('auth');
   if (stored) {
     const who = prefs.getItem('ankiUser') || 'AnkiWeb アカウント';
@@ -458,15 +495,6 @@ function editorPane(detail, ctx) {
       ctx.redrawCard();
     } catch (e) { ctx.toast('CSS を更新できませんでした: ' + (e.message || e)); }
   };
-
-  const saveBox = row(detail, '保存したとき (⌘S・保存ボタン)');
-  const onSave = document.createElement('select');
-  onSave.innerHTML =
-    '<option value="0">保存だけする</option>' +
-    '<option value="1">保存して同期する</option>';
-  onSave.value = prefs.getItem('syncOnSave') === '1' ? '1' : '0';
-  onSave.onchange = () => prefs.setItem('syncOnSave', onSave.value);
-  saveBox.appendChild(onSave);
 
   const wrapBox = row(detail, 'HTML エディタの長い行');
   const wrap = document.createElement('select');

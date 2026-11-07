@@ -30,7 +30,34 @@ function mark(name) {
       `${new Date().toISOString()} ${name} ${Date.now() - bootStarted}ms\n`);
   } catch { /* 記録できなくても進む */ }
 }
-const COLLECTION_DIR = path.join(HOME, 'collection');
+// Anki 本体のプロフィール (~/Library/Application Support/Anki2/<名前>/) を直接開く。
+// AnkiWeb には触れない (規約上、第三者クライアントの接続は認められていない)。同期は Anki が行う
+const ANKI2_DIR = path.join(os.homedir(), 'Library/Application Support/Anki2');
+function listProfiles() {
+  try {
+    return fs.readdirSync(ANKI2_DIR, { withFileTypes: true })
+      .filter((d) => d.isDirectory() && fs.existsSync(path.join(ANKI2_DIR, d.name, 'collection.anki2')))
+      .map((d) => d.name);
+  } catch { return []; }
+}
+function currentProfile() {
+  const all = listProfiles();
+  const chosen = readSettings().ankiProfile;
+  if (chosen && all.includes(chosen)) return chosen;
+  return all.length ? all[0] : null;
+}
+function collectionPath() {
+  const p = currentProfile();
+  return p ? path.join(ANKI2_DIR, p, 'collection.anki2') : null;
+}
+/** Anki 本体が動いているか (動いている間はコレクションに触らない) */
+function ankiRunning() {
+  try {
+    const out = require('child_process').execSync('pgrep -f "Anki.app/Contents/MacOS/" || true', { encoding: 'utf8' });
+    return out.trim().length > 0;
+  } catch { return false; }
+}
+let collectionOpen = false;
 
 /** Python の場所。同梱があればそれを、無ければ開発用の venv を使う */
 function pythonPath() {
@@ -158,6 +185,9 @@ function createWindow() {
     e.preventDefault();
     win.webContents.send('confirm-close');
   });
+  // 窓が裏に回ったらコレクションを手放し、Anki を開けるようにする (画面側が保存してから閉じる)
+  win.on('blur', () => { if (!win.isDestroyed()) win.webContents.send('window-blur'); });
+  win.on('focus', () => { if (!win.isDestroyed()) win.webContents.send('window-focus'); });
   const query = process.env.ANKI_SELFTEST
     ? (process.env.ANKI_SELFTEST === 'small' ? '?selftest&small' : '?selftest')
     : '';
@@ -272,10 +302,27 @@ app.whenReady().then(async () => {
   win0.once('ready-to-show', () => mark('窓が出せる状態'));
   win0.webContents.once('did-finish-load', () => mark('画面を読み込んだ'));
 
+  /** コレクションを開く。開けない理由 (NO_PROFILE / ANKI_RUNNING) はそのまま投げる */
+  async function openCollection() {
+    if (collectionOpen) return;
+    const colPath = collectionPath();
+    if (!colPath) throw new Error('NO_PROFILE');
+    if (ankiRunning()) throw new Error('ANKI_RUNNING');
+    const r = await bridge.call('open', { path: colPath });
+    mediaDir = r.mediaDir;
+    collectionOpen = true;
+    mark('コレクションを開いた');
+  }
+
   async function startBridge() {
-    fs.mkdirSync(COLLECTION_DIR, { recursive: true });
     bridge = new Bridge();
+    collectionOpen = false;
     mark('ブリッジを起動');
+    if (!collectionPath() || ankiRunning()) {
+      // 開けない理由は画面側が案内する (Anki が終了したら自動で開く)
+      mark(collectionPath() ? 'Anki が起動中なので待機' : 'Anki のプロフィールが無い');
+      return;
+    }
     let opened = null;
     let lastError = null;
     for (let i = 0; i < 5 && !opened; i++) {
@@ -295,17 +342,15 @@ app.whenReady().then(async () => {
         } catch { /* 片付けられなくても、次の試行へ進む */ }
       }
       try {
-        opened = await bridge.call('open', {
-          path: path.join(COLLECTION_DIR, 'collection.anki2'),
-        });
+        await openCollection();
+        opened = true;
       } catch (e) {
         lastError = e;
+        if (/ANKI_RUNNING|NO_PROFILE/.test(e.message || '')) return;
         await new Promise((r) => setTimeout(r, 700));
       }
     }
     if (!opened) throw lastError || new Error('コレクションを開けません');
-    mark('コレクションを開いた');
-    mediaDir = opened.mediaDir;
   }
 
   let ready = startBridge();
@@ -330,9 +375,35 @@ app.whenReady().then(async () => {
 
   ipcMain.handle('anki', async (_event, method, params) => {
     await ensureBridge();
+    if (method === 'open') { collectionOpen = false; await openCollection(); return { path: collectionPath(), mediaDir }; }
+    if (method === 'close') {
+      if (collectionOpen) { await bridge.call('close', {}); collectionOpen = false; mark('コレクションを閉じた'); }
+      return null;
+    }
+    if (!collectionOpen) await openCollection();   // 閉じていれば開き直す。Anki が動いていれば ANKI_RUNNING
     return bridge.call(method, params);
   });
-  ipcMain.handle('mediaDir', async () => { await ensureBridge(); return mediaDir; });
+  ipcMain.handle('mediaDir', async () => {
+    await ensureBridge();
+    if (!collectionOpen) { try { await openCollection(); } catch { /* 画面側が案内する */ } }
+    return mediaDir;
+  });
+  // Anki のプロフィールと本体の状態
+  ipcMain.handle('anki:status', () => ({
+    profiles: listProfiles(), profile: currentProfile(), path: collectionPath(),
+    running: ankiRunning(), open: collectionOpen,
+  }));
+  ipcMain.handle('anki:setProfile', async (_e, name) => {
+    const all = readSettings(); all.ankiProfile = name; writeSettings(all);
+    if (collectionOpen) { try { await bridge.call('close', {}); } catch {} collectionOpen = false; }
+    return currentProfile();
+  });
+  // Anki 本体を開く (同期は Anki で行う)。その前にこちらはコレクションを手放す
+  ipcMain.handle('anki:launch', async () => {
+    if (collectionOpen) { try { await bridge.call('close', {}); } catch {} collectionOpen = false; mark('Anki を開くためにコレクションを閉じた'); }
+    require('child_process').spawn('open', ['-a', 'Anki'], { detached: true, stdio: 'ignore' }).unref();
+    return true;
+  });
 
   // プレビューの最大幅より広くしない (0 なら制限なし)
   ipcMain.handle('window:maxWidth', (_e, width) => {
@@ -726,8 +797,8 @@ app.whenReady().then(async () => {
   });
 
   ipcMain.handle('backup:now', (_e, dir, keep) => {
-    const source = path.join(COLLECTION_DIR, 'collection.anki2');
-    if (!fs.existsSync(source)) throw new Error('コレクションが見つかりません');
+    const source = collectionPath();
+    if (!source || !fs.existsSync(source)) throw new Error('コレクションが見つかりません');
     fs.mkdirSync(dir, { recursive: true });
     const now = new Date();
     const two = (n) => String(n).padStart(2, '0');
@@ -795,7 +866,7 @@ app.whenReady().then(async () => {
     });
   } catch { /* 見張れなくても動く */ }
 
-  ipcMain.handle('collection:path', () => path.join(COLLECTION_DIR, 'collection.anki2'));
+  ipcMain.handle('collection:path', () => collectionPath());
   ipcMain.handle('mark', (_e, name) => mark(name));
 
   // 実際の打鍵の重さを書き残す (原因を追うため)

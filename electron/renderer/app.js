@@ -26,6 +26,16 @@ const call = async (method, params) => {
   try {
     return await window.anki.call(method, params);
   } catch (e) {
+    const msg = e.message || '';
+    // Anki 本体が動いている間はコレクションに触れない。終了を待ってからやり直す
+    if (/ANKI_RUNNING/.test(msg)) {
+      await waitForAnkiToQuit();
+      return window.anki.call(method, params);
+    }
+    if (/NO_PROFILE/.test(msg)) {
+      showAnkiBanner('noProfile');
+      throw new Error('Anki のプロフィールが見つかりません');
+    }
     // 控え (バックアップ) などで閉じたまま残ったときは、開き直してもう一度
     if (method !== 'open' && method !== 'close' && /コレクションが開かれていません/.test(e.message || '')) {
       window.anki.mark(`閉じたままの呼び出し: ${method} → 開き直す`);
@@ -34,6 +44,61 @@ const call = async (method, params) => {
     throw e;
   }
 };
+
+/* ---------------- Anki 本体との住み分け ---------------- */
+
+const ankiState = { profile: null, waiting: null };
+
+function showAnkiBanner(kind) {
+  const banner = el('ankiBanner');
+  const text = el('ankiBannerText');
+  const button = el('ankiBannerButton');
+  if (!kind) { banner.hidden = true; return; }
+  banner.hidden = false;
+  if (kind === 'running') {
+    text.textContent = 'Anki が起動中のため待機しています。Anki で同期や学習を終えて Anki を終了すると、自動で再開します。';
+    button.hidden = true;
+  } else {
+    text.textContent = 'Anki のプロフィールが見つかりません。Anki をインストールして一度起動してから、設定で選んでください。';
+    button.hidden = false;
+    button.textContent = '設定を開く';
+    button.onclick = () => el('settings').click();
+  }
+}
+
+/** Anki が終了するまで待つ (何度呼ばれても待ち合わせは 1 つ) */
+function waitForAnkiToQuit() {
+  if (ankiState.waiting) return ankiState.waiting;
+  showAnkiBanner('running');
+  ankiState.waiting = (async () => {
+    for (;;) {
+      await new Promise((r) => setTimeout(r, 1500));
+      try {
+        const st = await window.anki.ankiStatus();
+        if (!st.running) break;
+      } catch { break; }
+    }
+    showAnkiBanner(null);
+    ankiState.waiting = null;
+    toast('Anki が終了したので再開します');
+  })();
+  return ankiState.waiting;
+}
+
+/** プロフィールの有無を調べて画面の状態を合わせる */
+async function loadAnkiStatus() {
+  try {
+    const st = await window.anki.ankiStatus();
+    ankiState.profile = st.profile;
+    if (!st.profile) showAnkiBanner('noProfile');
+    else if (st.running) { waitForAnkiToQuit(); }
+    else showAnkiBanner(null);
+    return st;
+  } catch (e) {
+    ankiState.profile = null;
+    return null;
+  }
+}
 
 /** メディア同期が裏で動いている間は、コレクションを閉じてはいけない (開き直せなくなる) */
 async function waitMediaIdle(maxMs = 90000) {
@@ -2066,8 +2131,7 @@ async function save({ sync: alsoSync = null } = {}) {
     await reloadEditor();
     return;
   }
-  // 保存時に同期するかどうかは設定で決める (既定は保存だけ)
-  if (alsoSync === null) alsoSync = prefs.getItem('syncOnSave') === '1';
+  alsoSync = false;   // 同期は Anki 本体が行う
   if (!state.selected || !state.draft) { toast('編集中のノートがありません'); return; }
   if (state.editor && state.editor.isReviewing && state.editor.isReviewing()) finishReview(true);
   // 編集中の内容が、いま選んでいるノートのものか確かめる。
@@ -2092,12 +2156,7 @@ async function save({ sync: alsoSync = null } = {}) {
     state.unsynced = true;
     prefs.setItem('unsynced', '1');
     await recordEdit(state.selected, state.draft.fields, state.draft.tags);
-    if (alsoSync && loggedIn()) {
-      toast('保存しました。同期します…');
-      await sync();
-    } else {
-      toast('保存しました');
-    }
+    toast('保存しました');
   } catch (e) {
     toast('保存できません: ' + e.message);
     console.log('[save] 失敗: ' + e.message);
@@ -2432,7 +2491,25 @@ function auth() {
   return raw ? JSON.parse(raw) : null;
 }
 
-async function sync({ resolving = false } = {}) {
+/** 「同期」= 編集を保存してコレクションを手放し、Anki 本体を開く。同期そのものは Anki が行う */
+async function sync() {
+  if (state.editing && state.dirty) await save();
+  const button = el('sync');
+  button.classList.add('busy');
+  try {
+    await window.anki.ankiLaunch();
+    state.unsynced = false;
+    prefs.setItem('unsynced', '0');
+    toast('Anki を開きました。Anki の同期ボタンで AnkiWeb と同期してください');
+  } catch (e) {
+    toast('Anki を開けません: ' + e.message);
+  } finally {
+    button.classList.remove('busy');
+  }
+}
+
+/** (旧) Carrel 自身の同期。AnkiWeb の規約で第三者クライアントは認められていないため使わない */
+async function syncLegacy({ resolving = false } = {}) {
   const credentials = auth();
   if (!credentials) { toast('設定から AnkiWeb にログインしてください'); return; }
   const button = el('sync');
@@ -2794,8 +2871,8 @@ async function restoreSession() {
   });
 }
 
-/** ログインしているか */
-function loggedIn() { return !!prefs.getItem('auth'); }
+/** カードを読み込める状態か (Anki のプロフィールがある) */
+function loggedIn() { return !!ankiState.profile; }
 
 let countedTags = false;
 
@@ -3116,8 +3193,8 @@ async function boot() {
 
     // 1. 何も編集していない → そのまま閉じる
     if (!unsaved && !state.unsynced) { window.anki.closeNow(); return; }
-    // ログインしていなければ同期のしようがないので、保存の有無だけ聞く
-    const canSync = loggedIn();
+    // 同期は Anki 本体が行うので、ここでは保存の有無だけ聞く
+    const canSync = false;
 
     el('quitDetail').textContent = unsaved
       ? '保存していない編集があります。'
@@ -3557,7 +3634,9 @@ async function boot() {
     research: () => search(),
     titleOf: (note) => noteTitle(note, 2).join(' ').slice(0, 60) || `ノート ${note.id}`,
     sync: () => sync(),
-    refreshLogin: async () => { showLoginCall(); await refreshAll(); showLoginCall(); },
+    refreshLogin: async () => { await loadAnkiStatus(); showLoginCall(); await refreshAll(); showLoginCall(); },
+    ankiStatus: () => window.anki.ankiStatus(),
+    ankiSetProfile: (name) => window.anki.ankiSetProfile(name),
     retag: () => applyTagSettings(),
     tagCounts: state.tagCounts,
     applyWidths: () => layout(),
@@ -3591,9 +3670,36 @@ async function boot() {
     if (!hiddenAtBoot.has(tag)) state.selectedTags.add(tag);
   }
 
+  await loadAnkiStatus();
   showLoginCall();
   updateTitlebar();
   watchTyping();
+  // 窓が裏に回ったら、保存してコレクションを手放す (Anki を開けるように)。戻ったら必要なときに開き直る
+  let releaseTimer = null;
+  window.anki.onWindowBlur(() => {
+    clearTimeout(releaseTimer);
+    releaseTimer = setTimeout(async () => {
+      try {
+        if (state.editing && state.dirty) await save();
+        await window.anki.call('close', {});
+        window.anki.mark('窓が裏に回ったのでコレクションを閉じた');
+      } catch (e) { window.anki.mark('裏に回ったときの close 失敗: ' + e.message); }
+    }, 1500);
+  });
+  window.anki.onWindowFocus(async () => {
+    clearTimeout(releaseTimer);
+    const st = await loadAnkiStatus();
+    // 裏に回っている間に Anki が編集・同期したかもしれないので、読み直す
+    if (st && st.profile && !st.open && !st.running) {
+      try {
+        await refreshAll();
+        if (state.selected) {
+          const again = state.notes.find((n) => n.id === state.selected.id);
+          if (again) await select(again);
+        }
+      } catch (e) { window.anki.mark('戻ったときの読み直し失敗: ' + e.message); }
+    }
+  });
   if (loggedIn()) el('count').textContent = '読み込んでいます…';
   // いつまでも読み込みが終わらないとき (裏側が落ちている等) は、黙って待たせない
   const stuck = setTimeout(() => {
@@ -3611,10 +3717,6 @@ async function boot() {
   lap('前回の状態を戻す');
   // ここから先は、画面が出たあとに裏で進める
   setTimeout(async () => {
-    if (loggedIn()) {
-      await startupSync();
-      try { await refreshAll(); } catch (e) { window.anki.mark('同期後の読み直し失敗: ' + e.message); }
-    }
     await autoBackup();
     // 何かの拍子に一覧が空のままなら、もう一度だけ読み直す
     if (!state.notes.length) {
@@ -3753,15 +3855,13 @@ function updateTitlebar() {
 
 function showLoginCall() {
   const need = !loggedIn();
-  // 未ログインのあいだは検索や追加も伏せておく
+  // プロフィールが無いあいだは検索や追加も伏せておく
   el('keyword').disabled = need;
   el('addNote').disabled = need;
-  el('count').textContent = need ? 'ログインすると表示されます' : `${state.notes.length} 件`;
-  el('loginCall').hidden = !need;
-  // ログインの案内を出しているあいだは、説明文は出さない
-  el('emptyText').hidden = need;
-  el('emptyText').textContent = 'ノートを選ぶとここに実際のカードが表示されます';
-  el('loginCallButton').onclick = () => el('settings').click();
+  el('count').textContent = need ? 'Anki のプロフィールが必要です' : `${state.notes.length} 件`;
+  el('emptyText').textContent = need
+    ? 'Anki をインストールして一度起動すると、そのカードをここで編集できます'
+    : 'ノートを選ぶとここに実際のカードが表示されます';
 }
 
 /** 時間のかかる処理が終わるまで待つ */

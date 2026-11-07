@@ -13,7 +13,7 @@ Anki そのものを置き換えるのではなく、Anki と同じコレクシ�
 - **検索と一覧**: Anki の検索構文、タグ・デッキでの絞り込み、丸数字を正しく並べる並べ替え
 - **HTML エディタ**: 構文色付け、折りたたみ、タグの対応ハイライト、検索と置換 (このノート / すべてのノート)、自動閉じタグ、画像のペースト
 - **ライブプレビュー**: ノートタイプの CSS とテンプレートをそのまま適用。画像のライトボックス、カード内検索
-- **AnkiWeb 同期**: Anki 公式の同期プロトコルで、Anki や AnkiMobile と同じコレクションを扱える
+- **Anki 本体と同じコレクション**: Anki のプロフィールを直接開いて編集する。AnkiWeb との同期は Anki 本体で行う (Carrel は AnkiWeb に接続しない)
 - **AI 支援 (任意)**: Claude / ChatGPT / Gemini の API キーを入れると、カードの書き換え・整形を依頼できる。キーは自分で用意する
 - **テンプレート編集・メディア整理・スニペット**
 
@@ -37,11 +37,14 @@ Carrel.app を Applications に入れてください。Apple Silicon (M1 以降)
 
 ## 使い方
 
-1. 初回起動時の案内 (または 設定 › AnkiWeb) からログインすると、コレクションを取得します
-2. 左の一覧からカードを選ぶと右にプレビューが出ます。鉛筆アイコンで編集に入ります
-3. 編集は自動で保存され、同期ボタンで AnkiWeb に送られます
+1. Mac に [Anki](https://apps.ankiweb.net/) を入れて一度起動し、AnkiWeb と同期しておきます
+2. Anki を終了して Carrel を開くと、Anki のプロフィール (`~/Library/Application Support/Anki2/<名前>/`) のカードが一覧に出ます。プロフィールが複数あるときは 設定 › Anki で選びます
+3. 左の一覧からカードを選ぶと右にプレビューが出ます。鉛筆アイコンで編集に入り、⌘S で保存します
+4. AnkiWeb に送るときは右上の同期ボタンを押します。Carrel がコレクションを手放して Anki を開くので、Anki の同期ボタンを押してください
+5. Anki を起動している間、Carrel は待機します (Anki を終了すると自動で再開)。Carrel の窓が裏に回ったときもコレクションを手放すので、Anki をいつでも開けます
 
-データは `~/Library/Application Support/Carrel/` に置かれます。
+Carrel 自身の設定やバックアップは `~/Library/Application Support/Carrel/` に置かれます。
+AnkiWeb の利用規約は第三者クライアントの接続を認めていないため、Carrel は AnkiWeb に直接接続しません。
 
 ## ソースからビルドする
 
@@ -59,7 +62,7 @@ npm run dist         # dist/ に dmg と zip を作る (無署名)
 
 ```
 electron/     macOS 版 Carrel (Electron + 同梱 Python の anki ライブラリ)
-ios/          iOS 版 (SwiftUI、閲覧と AnkiWeb からの取得のみ)
+ios/          iOS 版 (SwiftUI、閲覧のみ。Anki のプロフィールのフォルダを取り込んで読む)
 macos/bridge/ Python ブリッジ (anki ライブラリとの橋渡し)
 app/ shared/  以前の Android 版と Compose 版 (保守は停止)
 ```

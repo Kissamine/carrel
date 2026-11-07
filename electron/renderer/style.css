@@ -1474,3 +1474,13 @@ dialog input[type="radio"],
 
 /* ひな形 (スニペット) の印は緑系で区別 */
 #aiPrompt .mention.snip { color: #b7e4c7; background: rgba(120,200,140,.16); box-shadow: 0 0 0 1px rgba(120,200,140,.4); }
+
+/* Anki 本体が動いている間などの案内 */
+#ankiBanner {
+  position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%); z-index: 60;
+  max-width: 560px; display: flex; align-items: center; gap: 12px;
+  padding: 10px 16px; border-radius: 12px; font-size: 13px; line-height: 1.5;
+  background: var(--surface-variant); color: var(--on-surface);
+  box-shadow: 0 8px 28px rgba(0,0,0,.35); border: 1px solid var(--outline);
+}
+#ankiBanner[hidden] { display: none; }

@@ -58,13 +58,6 @@ final class Store: ObservableObject {
     @Published var statusFilter = UserDefaults.standard.string(forKey: "statusFilter") ?? "all" {
         didSet { UserDefaults.standard.set(statusFilter, forKey: "statusFilter") }
     }
-    // AnkiWeb
-    @Published var ankiwebKey: String? = Keychain.get("hostKey")
-    @Published var ankiwebUser: String = UserDefaults.standard.string(forKey: "ankiwebUser") ?? ""
-    @Published var syncing = false
-    @Published var syncStatus = ""
-    @Published var lastSync: Date? = UserDefaults.standard.object(forKey: "lastSync") as? Date
-    var loggedIn: Bool { !(ankiwebKey ?? "").isEmpty }
     /// 選んでいるカード (次に開いたときも同じカードに戻る)
     @Published var selectedNoteId: Int64? = {
         let v = UserDefaults.standard.string(forKey: "selectedNoteId") ?? ""
@@ -166,83 +159,6 @@ final class Store: ObservableObject {
             decks = result.2.filter { $0.name != "Default" || nd.values.contains($0.id) }
             if let sel = selectedNoteId, !notes.contains(where: { $0.id == sel }) { selectedNoteId = nil }
             if let d = selectedDeck, !decks.contains(where: { $0.id == d }) { selectedDeck = nil }
-        } catch {
-            self.error = error.localizedDescription
-        }
-    }
-
-    // ---- AnkiWeb ----
-
-    func ankiwebLogin(username: String, password: String) async throws {
-        let key = try await AnkiWebClient.login(username: username, password: password)
-        Keychain.set("hostKey", key)
-        ankiwebKey = key
-        ankiwebUser = username
-        UserDefaults.standard.set(username, forKey: "ankiwebUser")
-    }
-
-    func ankiwebLogout() {
-        Keychain.set("hostKey", nil)
-        ankiwebKey = nil
-        UserDefaults.standard.removeObject(forKey: "mediaUsn")
-    }
-
-    /// AnkiWeb からコレクションとメディアを取ってくる (こちらからは何も送らない)
-    func sync() async {
-        guard let key = ankiwebKey, !key.isEmpty, !syncing else { return }
-        syncing = true; error = nil
-        defer { syncing = false; syncStatus = "" }
-        let client = AnkiWebClient(hostKey: key)
-        let fm = FileManager.default
-        do {
-            syncStatus = "AnkiWeb に接続中…"
-            _ = try await client.meta()
-            syncStatus = "カードを受信中…"
-            let tmp = try await client.downloadCollection()
-            // 開けるか確かめてから入れ替える
-            let check = try await Task.detached { () throws -> Int in
-                let db = try CollectionDB(path: tmp.path)
-                return try db.notes().count
-            }.value
-            syncStatus = "\(check) 件のノートを保存中…"
-            for name in ["collection.anki2", "collection.anki2-wal", "collection.anki2-shm"] {
-                try? fm.removeItem(at: Self.dataDir.appendingPathComponent(name))
-            }
-            try fm.moveItem(at: tmp, to: Self.collectionPath)
-            importedAt = Date()
-            UserDefaults.standard.set(importedAt, forKey: "importedAt")
-            await load()
-
-            // メディア: 前回の usn から変わった分だけ
-            try fm.createDirectory(at: Self.mediaDir, withIntermediateDirectories: true)
-            let hasMedia = ((try? fm.contentsOfDirectory(atPath: Self.mediaDir.path)) ?? []).contains { !$0.hasPrefix("__") }
-            var lastUsn = hasMedia ? UserDefaults.standard.integer(forKey: "mediaUsn") : 0
-            syncStatus = "メディアを確認中…"
-            let serverUsn = try await client.mediaBegin()
-            var toGet: [String] = []
-            while lastUsn < serverUsn {
-                let changes = try await client.mediaChanges(since: lastUsn)
-                if changes.isEmpty { break }
-                for c in changes {
-                    if c.sha1.isEmpty { try? fm.removeItem(at: Self.mediaDir.appendingPathComponent(c.name)) }
-                    else { toGet.append(c.name) }
-                    lastUsn = max(lastUsn, c.usn)
-                }
-            }
-            toGet = Array(Set(toGet))
-            var done = 0
-            for chunk in stride(from: 0, to: toGet.count, by: 25).map({ Array(toGet[$0..<min($0 + 25, toGet.count)]) }) {
-                syncStatus = "メディアを受信中… \(done) / \(toGet.count)"
-                let files = try await client.downloadFiles(chunk)
-                for (name, data) in files {
-                    try? data.write(to: Self.mediaDir.appendingPathComponent(name.precomposedStringWithCanonicalMapping), options: .atomic)
-                }
-                done += chunk.count
-            }
-            UserDefaults.standard.set(max(lastUsn, serverUsn), forKey: "mediaUsn")
-            lastSync = Date()
-            UserDefaults.standard.set(lastSync, forKey: "lastSync")
-            await load()
         } catch {
             self.error = error.localizedDescription
         }
