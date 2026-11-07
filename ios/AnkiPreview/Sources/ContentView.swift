@@ -454,6 +454,7 @@ struct NoteListView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarLeading) { CarrelLogoView(height: 18).padding(.leading, 4) }
+                .sharedBackgroundVisibility(.hidden)   // ロゴはボタン (ガラスの地) に見せない
             if !wide {
                 ToolbarItem(placement: .topBarTrailing) { optionsMenu }
             }
