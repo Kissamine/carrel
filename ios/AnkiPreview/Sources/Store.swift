@@ -232,6 +232,8 @@ final class Store: ObservableObject {
 
     /// メディアが増えたら上げる (プレビューの描き直しのきっかけ)
     @Published var mediaVersion = 0
+    /// 拡大表示中の画像 (画面全体に対して出すため、ここで持つ)
+    @Published var lightbox: LightboxItem? = nil
 
     nonisolated private static func exists(_ url: URL) -> Bool {
         var isDir: ObjCBool = false

@@ -15,6 +15,8 @@ struct ContentView: View {
         }
         .navigationSplitViewStyle(.balanced)
         .sheet(isPresented: $showSettings) { SettingsView().environmentObject(store) }
+        // 画像の拡大表示は画面全体に対して出す (詳細列から出すと、畳んだ Duo でサイドバーの分だけ横にずれる)
+        .fullScreenCover(item: $store.lightbox) { item in LightboxView(url: item.url) }
     }
 }
 
@@ -29,7 +31,6 @@ struct DetailView: View {
     @StateObject private var preview = PreviewController()
     @State private var showFind = false
     @State private var showInfo = false
-    @State private var lightbox: LightboxItem? = nil
     @FocusState private var findFocused: Bool
 
     var body: some View {
@@ -42,7 +43,7 @@ struct DetailView: View {
                 if showFind { findBar(barDark: barDark) }
                 PreviewView(html: store.previewHTML(for: note, dark: dark) + "<!-- media \(store.mediaVersion) -->", mediaDir: Store.mediaDir,
                             highlights: store.highlightTerms, controller: preview,
-                            onImage: { url in lightbox = LightboxItem(url: url) })
+                            onImage: { url in store.lightbox = LightboxItem(url: url) })
                     .ignoresSafeArea(edges: .bottom)
             }
             .background(bg)
@@ -98,7 +99,6 @@ struct DetailView: View {
                 }
             }
             .sheet(isPresented: $showInfo) { CardInfoView(note: note).environmentObject(store) }
-            .fullScreenCover(item: $lightbox) { item in LightboxView(url: item.url) }
         } else if !store.hasCollection {
             ContentUnavailableView {
                 Label("コレクションがありません", systemImage: "tray.and.arrow.down")
