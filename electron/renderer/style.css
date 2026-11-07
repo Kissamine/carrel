@@ -1485,3 +1485,49 @@ dialog input[type="radio"],
 /* 設定: 同期の模式図 */
 .sync-figure { margin: 6px 0 2px; color: var(--fg, currentColor); }
 .sync-figure svg { display: block; max-width: 640px; }
+
+
+/* ============ 設定: iOS 風のまとまり ============ */
+#settingsDialog { width: 76vw; max-width: 900px; height: 82vh; }
+#settingsNav { width: 200px; padding: 10px 8px; border-right: 1px solid rgba(255,255,255,.08); }
+#settingsNav button { padding: 8px 10px; border-radius: 8px; font-size: 13px; margin-bottom: 1px; }
+#settingsNav button.on { background: rgba(169,199,255,.18); color: var(--on-surface); font-weight: 600; }
+#settingsDetail { padding: 22px 26px 30px; }
+#settingsDetail h3 { font-size: 20px; font-weight: 700; margin: 0 0 16px; letter-spacing: .01em; }
+#settingsDetail .subhead {
+  font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: none;
+  color: var(--on-surface-variant); margin: 22px 2px 6px;
+}
+#settingsDetail .subhead:first-of-type, #settingsDetail h3 + .subhead { margin-top: 2px; }
+/* 1 行 = 角丸のカード。見出し (label) は左、部品は右に寄る */
+#settingsDetail .row {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px;
+  margin: 0 0 10px; padding: 11px 14px;
+  background: rgba(255,255,255,.055); border: 1px solid rgba(255,255,255,.06); border-radius: 12px;
+}
+#settingsDetail .row > .label { flex: 1 1 auto; font-size: 13.5px; color: var(--on-surface); margin: 0; }
+#settingsDetail .row > .label + * { margin-left: auto; }
+#settingsDetail .row > .hint {
+  flex: 1 1 100%; order: 99; margin: 2px 0 0; font-size: 12px; line-height: 1.55;
+  color: var(--on-surface-variant);
+}
+/* 補足だけの行 (模式図や長い説明) は補足を上に */
+#settingsDetail .row > .hint:first-child:last-child { order: 0; }
+#settingsDetail .row > .hint:first-child { order: 0; margin: 0 0 4px; }
+#settingsDetail .row > .hint:first-child ~ .hint { order: 99; }
+#settingsDetail .row .hint.pick-path { order: 98; }
+#settingsDetail select, #settingsDetail input[type="text"], #settingsDetail input[type="number"],
+#settingsDetail input[type="password"], #settingsDetail input:not([type]) {
+  min-width: 0; width: auto; padding: 6px 10px; font-size: 13px;
+  background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.1); border-radius: 8px;
+}
+#settingsDetail select { padding-right: 26px; }
+#settingsDetail input[type="number"] { width: 90px; }
+#settingsDetail .row .pill { padding: 5px 13px; font-size: 12.5px; margin-top: 0 !important; }
+#settingsDetail .row .pill + .pill { margin-left: 0 !important; }
+#settingsDetail .row label { display: inline-flex; align-items: center; gap: 8px; font-size: 13.5px; }
+#settingsDetail .row textarea {
+  width: 100%; border-radius: 8px; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.1);
+  padding: 8px 10px; font-size: 12.5px;
+}
+#settingsDetail .sync-figure { flex: 1 1 100%; }

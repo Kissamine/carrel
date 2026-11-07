@@ -69,7 +69,13 @@ export function openSettings(ctx) {
     }
   }
 
-  async function renderDetail() {
+  // 続けて呼ばれても二重に描かないよう、前の描画が終わってから次を描く
+  let drawing = Promise.resolve();
+  function renderDetail() {
+    drawing = drawing.then(() => drawDetail()).catch(() => {});
+    return drawing;
+  }
+  async function drawDetail() {
     detail.innerHTML = '';
     const section = SECTIONS.find((s) => s.id === current);
     const h = document.createElement('h3');
@@ -110,7 +116,9 @@ function row(parent, hint) {
   box.className = 'row';
   if (hint) {
     const p = document.createElement('div');
-    p.className = 'hint';
+    // 短い文はその行の見出し (左)、長い説明は補足 (下) として見せる
+    const isLabel = hint.length <= 30 && !/[。！？]/.test(hint);
+    p.className = isLabel ? 'label' : 'hint';
     p.textContent = hint;
     box.appendChild(p);
   }
@@ -118,8 +126,18 @@ function row(parent, hint) {
   return box;
 }
 
+/** 項目のまとまりの小見出し */
+function subhead(parent, text) {
+  const h = document.createElement('div');
+  h.className = 'subhead';
+  h.textContent = text;
+  parent.appendChild(h);
+  return h;
+}
+
 async function ankiPane(detail, ctx) {
   const st = await ctx.ankiStatus();
+  subhead(detail, 'プロフィール');
   const box = row(detail, 'Carrel は Anki 本体のプロフィールを直接開いて編集します。AnkiWeb との同期は Anki 本体で行ってください');
   if (!st.profiles.length) {
     const none = document.createElement('div');
@@ -209,6 +227,7 @@ function syncFigure() {
 /** iOS 版 (iCloud Drive 経由) との同期の設定 */
 async function syncRows(detail, ctx) {
   // iOS 版のための iCloud Drive への書き出し
+  subhead(detail, '自動の書き出し');
   const ms = await window.anki.mirrorStatus();
   const mbox = row(detail, 'iOS 版 Carrel 用に iCloud Drive へ書き出す');
   const toggle = document.createElement('label');
@@ -235,6 +254,7 @@ async function syncRows(detail, ctx) {
   mbox.append(toggle, mwhere, now, mhint);
 
   // 手動同期: どちらを正とするか選んで読み込む
+  subhead(detail, '手動の同期');
   const sbox = row(detail, '手動で同期する');
   const pull = document.createElement('button');
   pull.className = 'pill'; pull.textContent = 'iCloud (iPhone) から読み込む';
@@ -530,6 +550,7 @@ function keysPane(detail, ctx) {
 }
 
 function editorPane(detail, ctx) {
+  subhead(detail, 'モード');
   const modeBox = row(detail, 'エディタを開いたときのモード');
   const mode = document.createElement('select');
   mode.innerHTML = '<option value="rich">テキスト</option><option value="html">HTML</option>';
@@ -537,6 +558,7 @@ function editorPane(detail, ctx) {
   mode.onchange = () => prefs.setItem('editorMode', mode.value);
   modeBox.appendChild(mode);
 
+  subhead(detail, '画像');
   const cornerBox = row(detail, '挿入する画像の角');
   const corner = document.createElement('select');
   corner.innerHTML = '<option value="SQUARE">四角</option><option value="ROUNDED">角丸</option>';
@@ -599,6 +621,7 @@ function editorPane(detail, ctx) {
     } catch (e) { ctx.toast('CSS を更新できませんでした: ' + (e.message || e)); }
   };
 
+  subhead(detail, 'HTML エディタ');
   const wrapBox = row(detail, 'HTML エディタの長い行');
   const wrap = document.createElement('select');
   wrap.innerHTML = '<option value="on">折り返す</option><option value="off">折り返さない (横にスクロール)</option>';
@@ -610,6 +633,7 @@ function editorPane(detail, ctx) {
   wrapHint.textContent = '折り返すと、2 行目以降はインデントの位置に揃いません (入力欄の仕組み上)。インデントを崩したくない場合は「折り返さない」を選んでください。';
   wrapBox.appendChild(wrapHint);
 
+  subhead(detail, 'プレビュー');
   const liveBox = row(detail, 'リアルタイムプレビュー');
   const live = document.createElement('select');
   live.innerHTML = '<option value="on">打つたびに更新</option><option value="off">手動で更新</option>';
@@ -1210,6 +1234,7 @@ async function aiPane(detail, ctx) {
 }
 
 function appearancePane(detail, ctx) {
+  subhead(detail, 'プレビューの大きさ');
   const minBox = row(detail, 'プレビューの最小幅（px）');
   const min = document.createElement('input');
   min.type = 'number';
@@ -1235,6 +1260,7 @@ function appearancePane(detail, ctx) {
   cssLine.append(openCss, inspect, cssPath);
   cssBox.appendChild(cssLine);
 
+  subhead(detail, 'カード');
   const zoomBox = row(detail, 'カードの文字サイズ (%)');
   const zoom = document.createElement('input');
   zoom.type = 'number';
@@ -1311,11 +1337,13 @@ async function backupPane(detail, ctx) {
   const dir = prefs.getItem('backupDir');
 
   // ---- データの流れの模式図 ----
+  subhead(detail, 'iOS 版との同期');
   const figBox = row(detail, 'Carrel のデータは次のように流れます。Anki のコレクションが正本で、iCloud Drive は iPhone との受け渡し用の写しです');
   figBox.appendChild(syncFigure());
   await syncRows(detail, ctx);
 
   // ---- 保存先 ----
+  subhead(detail, 'バックアップ');
   const dirBox = row(detail,
     'コレクションの控えを、選んだフォルダに書き出します。' +
     'iCloud Drive や Dropbox のフォルダを選べば、そのままクラウドに置けます');
