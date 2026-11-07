@@ -580,7 +580,7 @@ struct TutorialView: View {
                         Spacer()
                     }
                 }
-                .padding(.horizontal, 24).padding(.bottom, 24)
+                .padding(.horizontal, 24).padding(.top, 22).padding(.bottom, 24)
             }
         }
     }
@@ -592,7 +592,7 @@ struct TutorialArt: View {
     let color: Color
     /// 同梱のアイコン画像 (アセットカタログでなく素のファイルなので、パスから読む)
     static let appIconImage: UIImage = {
-        if let path = Bundle.main.path(forResource: "CarrelIcon", ofType: "png"), let img = UIImage(contentsOfFile: path) { return img }
+        if let path = Bundle.main.path(forResource: "CarrelIconBlue", ofType: "png"), let img = UIImage(contentsOfFile: path) { return img }
         return UIImage(systemName: "c.circle.fill") ?? UIImage()
     }()
     @Environment(\.colorScheme) var scheme
