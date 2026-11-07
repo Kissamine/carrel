@@ -193,7 +193,11 @@ final class Store: ObservableObject {
                 let srcSize = Self.size(from)
                 if let had = have[name], had == srcSize, srcSize > 0 { continue }
                 try? fm.removeItem(at: to)
-                do { try Self.copyWithDownload(from, to: to); copied += 1 } catch { missing += 1 }
+                do {
+                    try Self.copyWithDownload(from, to: to); copied += 1
+                    // 写し終えた画像から順にプレビューに出す
+                    if copied % 25 == 0 { Task { @MainActor in self.mediaVersion += 1 } }
+                } catch { missing += 1 }
             }
             return (copied, missing)
         }.value

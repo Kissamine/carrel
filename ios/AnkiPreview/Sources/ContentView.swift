@@ -466,7 +466,7 @@ struct SettingsView: View {
                     }
                     if store.hasCollection, let name = store.lastImportName {
                         Button {
-                            Task { await store.reimport() }
+                            dismiss(); Task { await store.reimport() }
                         } label: {
                             HStack {
                                 Label("「\(name)」から更新", systemImage: "arrow.clockwise")
@@ -501,13 +501,11 @@ struct SettingsView: View {
                 }
                 Section {
                     Picker("アプリアイコン", selection: $store.appIcon) {
-                        Text("標準 (テーマに合わせる)").tag("")
-                        Text("海 (水色の地に白い C)").tag("CarrelSea")
+                        Text("標準").tag("")
+                        Text("水色").tag("CarrelSea")
                     }
                     .onChange(of: store.appIcon) { _, name in store.applyAppIcon(name) }
-                } header: { Text("アイコン") } footer: {
-                    Text("標準はライト / ダークに合わせて地の色が変わり、C だけが水色になります。")
-                }
+                } header: { Text("アイコン") }
                 Section("一覧") {
                     Toggle("タグを表示", isOn: $store.showTagsInList)
                     Toggle("期限を表示", isOn: $store.showDueInList)
@@ -526,7 +524,7 @@ struct SettingsView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完了") { dismiss() } } }
             .fileImporter(isPresented: $picking, allowedContentTypes: [.folder, .data], allowsMultipleSelection: false) { result in
-                if case .success(let urls) = result, let url = urls.first { Task { await store.importFolder(url) } }
+                if case .success(let urls) = result, let url = urls.first { dismiss(); Task { await store.importFolder(url) } }
             }
         }
     }
