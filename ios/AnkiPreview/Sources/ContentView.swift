@@ -20,9 +20,7 @@ struct ContentView: View {
         .fullScreenCover(isPresented: $store.studying) { StudyView(options: store.studyOptions).environmentObject(store) }
         .sheet(isPresented: $store.showGuide) { GuideView().environmentObject(store) }
         .sheet(isPresented: $store.showTutorial, onDismiss: { store.tutorialDone() }) { TutorialView().environmentObject(store) }
-        // 起動直後、同期フォルダの確認中はアイコンの起動画面
-        .overlay { if store.checking && store.notes.isEmpty { LaunchSplash().transition(.opacity) } }
-        .animation(.easeOut(duration: 0.25), value: store.checking)
+
         // 画像の拡大表示は画面全体に対して出す (詳細列から出すと、畳んだ Duo でサイドバーの分だけ横にずれる)
         .fullScreenCover(item: $store.lightbox) { item in LightboxView(url: item.url) }
     }

@@ -761,26 +761,3 @@ struct TutorialArt: View {
         .frame(width: 84)
     }
 }
-
-// MARK: - 起動画面 (同期フォルダの確認中)
-
-struct LaunchSplash: View {
-    /// 同梱のアイコン画像 (アセットカタログでなく素のファイルなので、パスから読む)
-    static let appIconImage: UIImage = {
-        if let path = Bundle.main.path(forResource: "CarrelIcon", ofType: "png"), let img = UIImage(contentsOfFile: path) { return img }
-        return UIImage(systemName: "c.circle.fill") ?? UIImage()
-    }()
-    var body: some View {
-        ZStack {
-            Color(.systemBackground).ignoresSafeArea()
-            VStack(spacing: 18) {
-                Image(uiImage: Self.appIconImage)
-                    .resizable().scaledToFit()
-                    .frame(width: 120, height: 120)
-                    .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
-                    .shadow(color: .black.opacity(0.25), radius: 16, y: 8)
-                ProgressView().controlSize(.small)
-            }
-        }
-    }
-}
