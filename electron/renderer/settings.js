@@ -78,6 +78,17 @@ export function openSettings(ctx) {
   async function drawDetail() {
     detail.innerHTML = '';
     const section = SECTIONS.find((s) => s.id === current);
+    await drawPane();
+    // 「見出し + 部品 1 つ」の行だけ、見出しを左・部品を右に並べる (複雑な行は縦のまま)
+    for (const r of detail.querySelectorAll('.row')) {
+      const kids = [...r.children];
+      const simple = kids.length === 2 && kids[0].classList.contains('label')
+        && ['SELECT', 'INPUT', 'BUTTON', 'LABEL', 'SPAN'].includes(kids[1].tagName);
+      if (simple) r.classList.add('kv');
+    }
+  }
+  async function drawPane() {
+    const section = SECTIONS.find((s) => s.id === current);
     const h = document.createElement('h3');
     h.textContent = section.title;
     detail.appendChild(h);
@@ -126,6 +137,61 @@ function row(parent, hint) {
   return box;
 }
 
+/** 角丸のまとまり (題付き)。中に line() で行を足す */
+function card(parent, title) {
+  const box = document.createElement('div');
+  box.className = 'card';
+  if (title) {
+    const h = document.createElement('div');
+    h.className = 'card-title';
+    h.textContent = title;
+    box.appendChild(h);
+  }
+  parent.appendChild(box);
+  return box;
+}
+/** カードの 1 行: 左に見出し、右に部品 */
+function line(parent, label, ...controls) {
+  const l = document.createElement('div');
+  l.className = 'line';
+  const t = document.createElement('span');
+  t.className = 'line-label';
+  t.textContent = label;
+  l.appendChild(t);
+  const right = document.createElement('span');
+  right.className = 'line-right';
+  for (const c of controls) if (c) right.appendChild(typeof c === 'string' ? document.createTextNode(c) : c);
+  l.appendChild(right);
+  parent.appendChild(l);
+  return l;
+}
+/** ボタンの列 */
+function actions(parent, ...buttons) {
+  const a = document.createElement('div');
+  a.className = 'actions';
+  for (const b of buttons) if (b) a.appendChild(b);
+  parent.appendChild(a);
+  return a;
+}
+function pillButton(text, kind = '') {
+  const b = document.createElement('button');
+  b.className = 'pill' + (kind ? ' ' + kind : '');
+  b.textContent = text;
+  return b;
+}
+function switchInput(checked) {
+  const c = document.createElement('input');
+  c.type = 'checkbox'; c.className = 'switch'; c.checked = !!checked;
+  return c;
+}
+/** 長いパスを「iCloud Drive/…」「~/…」の形に */
+function shortPath(p) {
+  if (!p) return '';
+  const i = p.indexOf('com~apple~CloudDocs/');
+  if (i >= 0) return 'iCloud Drive/' + p.slice(i + 'com~apple~CloudDocs/'.length);
+  return p.replace(/^\/Users\/[^/]+/, '~');
+}
+
 /** 項目のまとまりの小見出し */
 function subhead(parent, text) {
   const h = document.createElement('div');
@@ -137,7 +203,6 @@ function subhead(parent, text) {
 
 async function ankiPane(detail, ctx) {
   const st = await ctx.ankiStatus();
-  subhead(detail, 'プロフィール');
   const box = row(detail, 'Carrel は Anki 本体のプロフィールを直接開いて編集します。AnkiWeb との同期は Anki 本体で行ってください');
   if (!st.profiles.length) {
     const none = document.createElement('div');
@@ -174,108 +239,81 @@ async function ankiPane(detail, ctx) {
 
 }
 
-/** iCloud ⇄ macOS 版 Carrel ⇄ Anki のコレクション の模式図 */
+/** iOS 版 ⇄ macOS 版 Carrel ⇄ Anki の模式図 (簡素に) */
 function syncFigure() {
   const wrap = document.createElement('div');
   wrap.className = 'sync-figure';
+  const box = (x, title, sub, color) => [
+    '<g transform="translate(' + x + ',14)">',
+    '<rect width="180" height="64" rx="12" fill="' + color + '" fill-opacity="0.12" stroke="' + color + '" stroke-opacity="0.55"/>',
+    '<text x="90" y="28" text-anchor="middle" font-weight="600" font-size="13">' + title + '</text>',
+    '<text x="90" y="48" text-anchor="middle" font-size="11" opacity="0.7">' + sub + '</text>',
+    '</g>',
+  ].join('');
   wrap.innerHTML = [
-    '<svg viewBox="0 0 640 170" width="100%" xmlns="http://www.w3.org/2000/svg" fill="currentColor" font-family="-apple-system, Hiragino Sans, sans-serif" font-size="12">',
-    '  <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="currentColor"/></marker></defs>',
-    // iPhone / iCloud
-    '  <g transform="translate(12,30)">',
-    '    <rect width="170" height="110" rx="14" fill="rgba(90,170,255,0.12)" stroke="rgba(90,170,255,0.6)"/>',
-    '    <text x="85" y="26" text-anchor="middle" font-weight="600">iCloud Drive</text>',
-    '    <text x="85" y="46" text-anchor="middle" opacity="0.7">Carrel/プロフィール名</text>',
-    '    <text x="85" y="78" text-anchor="middle" opacity="0.8">iOS 版 Carrel が</text>',
-    '    <text x="85" y="94" text-anchor="middle" opacity="0.8">読み書きする写し</text>',
-    '  </g>',
-    // Carrel mac
-    '  <g transform="translate(235,30)">',
-    '    <rect width="170" height="110" rx="14" fill="rgba(0,200,200,0.10)" stroke="rgba(0,200,200,0.6)"/>',
-    '    <text x="85" y="26" text-anchor="middle" font-weight="600">macOS 版 Carrel</text>',
-    '    <text x="85" y="62" text-anchor="middle" opacity="0.8">起動時・保存時に</text>',
-    '    <text x="85" y="78" text-anchor="middle" opacity="0.8">両方を見比べて</text>',
-    '    <text x="85" y="94" text-anchor="middle" opacity="0.8">そろえる</text>',
-    '  </g>',
-    // Anki collection
-    '  <g transform="translate(458,30)">',
-    '    <rect width="170" height="110" rx="14" fill="rgba(255,170,60,0.12)" stroke="rgba(255,170,60,0.6)"/>',
-    '    <text x="85" y="26" text-anchor="middle" font-weight="600">Anki のコレクション</text>',
-    '    <text x="85" y="46" text-anchor="middle" opacity="0.7">Application Support/Anki2</text>',
-    '    <text x="85" y="78" text-anchor="middle" opacity="0.8">正本。Anki 本体が</text>',
-    '    <text x="85" y="94" text-anchor="middle" opacity="0.8">AnkiWeb と同期</text>',
-    '  </g>',
-    // arrows
-    '  <g stroke="currentColor" stroke-width="1.6" fill="none" opacity="0.75">',
-    '    <line x1="186" y1="72" x2="231" y2="72" marker-start="url(#ah)" marker-end="url(#ah)"/>',
-    '    <line x1="409" y1="72" x2="454" y2="72" marker-start="url(#ah)" marker-end="url(#ah)"/>',
-    '  </g>',
-    '  <g font-size="10" opacity="0.7" text-anchor="middle">',
-    '    <text x="208" y="60">変更分</text><text x="208" y="96">だけ</text>',
-    '    <text x="431" y="60">直接</text><text x="431" y="96">編集</text>',
-    '  </g>',
-    '  <g font-size="11" opacity="0.75" text-anchor="middle">',
-    '    <text x="97" y="160">iPhone で作る・直す・学ぶ</text>',
-    '    <text x="320" y="160">食い違いは選んで解決</text>',
-    '    <text x="543" y="160">Mac で編集 (⌘S で両方へ)</text>',
-    '  </g>',
+    '<svg viewBox="0 0 640 92" width="100%" xmlns="http://www.w3.org/2000/svg" fill="currentColor" font-family="-apple-system, Hiragino Sans, sans-serif">',
+    '<defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="currentColor"/></marker></defs>',
+    box(10, 'iOS 版 Carrel', 'iCloud Drive の写し', '#5AAAFF'),
+    box(230, 'macOS 版 Carrel', '両方を見比べてそろえる', '#00C8C8'),
+    box(450, 'Anki', 'コレクション (正本)', '#FFAA3C'),
+    '<g stroke="currentColor" stroke-width="1.5" opacity="0.7" fill="none">',
+    '<line x1="194" y1="46" x2="226" y2="46" marker-start="url(#ah)" marker-end="url(#ah)"/>',
+    '<line x1="414" y1="46" x2="446" y2="46" marker-start="url(#ah)" marker-end="url(#ah)"/>',
+    '</g>',
     '</svg>',
-  ].join('\n');
+  ].join('');
   return wrap;
 }
 
-/** iOS 版 (iCloud Drive 経由) との同期の設定 */
+/** iOS 版 (iCloud Drive 経由) との同期 */
 async function syncRows(detail, ctx) {
-  // iOS 版のための iCloud Drive への書き出し
-  subhead(detail, '自動の書き出し');
   const ms = await window.anki.mirrorStatus();
-  const mbox = row(detail, 'iOS 版 Carrel 用に iCloud Drive へ書き出す');
-  const toggle = document.createElement('label');
-  toggle.style.cssText = 'display:flex;align-items:center;gap:8px;cursor:pointer';
-  const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = ms.enabled;
-  cb.onchange = async () => { await window.anki.mirrorSetEnabled(cb.checked); ctx.toast(cb.checked ? '保存のたびに iCloud へ書き出します' : 'iCloud への書き出しを止めました'); };
-  toggle.append(cb, document.createTextNode('保存のたびに、変わった分だけ自動で書き出す'));
-  const mwhere = document.createElement('div');
-  mwhere.className = 'hint'; mwhere.style.marginTop = '8px';
-  mwhere.textContent = (ms.dir || '') + (ms.at ? '　(最終: ' + new Date(ms.at).toLocaleString('ja-JP') + ')' : '');
-  const now = document.createElement('button');
-  now.className = 'pill'; now.textContent = '今すぐ書き出す'; now.style.marginTop = '10px';
-  now.onclick = async () => {
-    now.disabled = true; now.textContent = '書き出しています…';
-    try {
-      const r = await window.anki.mirrorNow(true);
-      ctx.toast(r ? '書き出しました (メディア ' + r.copied + ' 件を更新)' : '書き出せませんでした');
-    } catch (e) { ctx.toast('書き出しに失敗: ' + e.message); }
-    now.disabled = false; now.textContent = '今すぐ書き出す';
-  };
-  const mhint = document.createElement('div');
-  mhint.className = 'hint'; mhint.style.marginTop = '8px';
-  mhint.textContent = 'iOS 版 Carrel の設定「外部ファイルの同期」で、このフォルダを一度選んでください。以後は iPhone で作った・直した・学習した内容が、Carrel の起動時と保存時に Anki のコレクションへ取り込まれます (両方で直したカードはどちらを残すか選べます)';
-  mbox.append(toggle, mwhere, now, mhint);
+  const box = card(detail, 'iOS 版と同期');
+  box.appendChild(syncFigure());
 
-  // 手動同期: どちらを正とするか選んで読み込む
-  subhead(detail, '手動の同期');
-  const sbox = row(detail, '手動で同期する');
-  const pull = document.createElement('button');
-  pull.className = 'pill'; pull.textContent = 'iCloud (iPhone) から読み込む';
-  pull.onclick = async () => {
-    pull.disabled = true;
-    try { await ctx.syncFromMirror({ silentIfNone: false }); } finally { pull.disabled = false; }
+  const on = switchInput(ms.enabled);
+  on.onchange = async () => {
+    await window.anki.mirrorSetEnabled(on.checked);
+    ctx.toast(on.checked ? '同期をオンにしました' : '同期をオフにしました');
+    ctx.reload();
   };
-  const push = document.createElement('button');
-  push.className = 'pill ghost'; push.textContent = 'Anki のコレクションから読み込む'; push.style.marginLeft = '8px';
-  push.onclick = async () => {
-    push.disabled = true; push.textContent = '書き出しています…';
-    try {
-      const r = await window.anki.mirrorNow(true);
-      ctx.toast(r ? 'Anki の内容で iCloud をそろえました (メディア ' + r.copied + ' 件を更新)' : '書き出せませんでした');
-    } catch (e) { ctx.toast('失敗: ' + e.message); }
-    push.disabled = false; push.textContent = 'Anki のコレクションから読み込む';
-  };
-  const shint = document.createElement('div');
-  shint.className = 'hint'; shint.style.marginTop = '8px';
-  shint.textContent = '「iCloud から読み込む」は iPhone 側の変更を Anki のコレクションへ取り込みます (食い違うカードは選べます)。「Anki のコレクションから読み込む」は Anki 側の内容で iCloud を上書きします';
-  sbox.append(pull, push, shint);
+  line(box, 'iCloud Drive で同期する', on);
+  if (ms.enabled) {
+    const where = document.createElement('span');
+    where.className = 'muted'; where.textContent = shortPath(ms.dir);
+    line(box, 'フォルダ', where);
+    const when = document.createElement('span');
+    when.className = 'muted';
+    when.textContent = ms.at ? new Date(ms.at).toLocaleString('ja-JP', { dateStyle: 'short', timeStyle: 'short' }) : 'まだ';
+    line(box, '最後に同期', when);
+
+    const now = pillButton('今すぐ同期');
+    now.onclick = async () => {
+      now.disabled = true; now.textContent = '同期しています…';
+      try {
+        await ctx.syncFromMirror({ silentIfNone: true });   // iOS 版の変更を取り込む
+        await window.anki.mirrorNow(true);                   // Mac 側の内容で iCloud をそろえる
+        ctx.toast('同期しました');
+        ctx.reload();
+      } catch (e) { ctx.toast('同期できません: ' + e.message); now.disabled = false; now.textContent = '今すぐ同期'; }
+    };
+    const more = pillButton('詳細…', 'ghost');
+    const adv = document.createElement('div');
+    adv.className = 'actions'; adv.hidden = true;
+    const pull = pillButton('iOS 版の内容を取り込む', 'ghost');
+    pull.onclick = async () => { pull.disabled = true; try { await ctx.syncFromMirror({ silentIfNone: false }); } finally { pull.disabled = false; } };
+    const push = pillButton('Mac の内容で iCloud を上書き', 'ghost');
+    push.onclick = async () => {
+      push.disabled = true;
+      try { await window.anki.mirrorNow(true); ctx.toast('iCloud を Mac の内容にそろえました'); ctx.reload(); }
+      catch (e) { ctx.toast('失敗: ' + e.message); }
+      push.disabled = false;
+    };
+    adv.append(pull, push);
+    more.onclick = () => { adv.hidden = !adv.hidden; };
+    actions(box, now, more);
+    box.appendChild(adv);
+  }
 }
 
 async function accountPaneLegacy(detail, ctx) {
@@ -550,7 +588,6 @@ function keysPane(detail, ctx) {
 }
 
 function editorPane(detail, ctx) {
-  subhead(detail, 'モード');
   const modeBox = row(detail, 'エディタを開いたときのモード');
   const mode = document.createElement('select');
   mode.innerHTML = '<option value="rich">テキスト</option><option value="html">HTML</option>';
@@ -558,7 +595,6 @@ function editorPane(detail, ctx) {
   mode.onchange = () => prefs.setItem('editorMode', mode.value);
   modeBox.appendChild(mode);
 
-  subhead(detail, '画像');
   const cornerBox = row(detail, '挿入する画像の角');
   const corner = document.createElement('select');
   corner.innerHTML = '<option value="SQUARE">四角</option><option value="ROUNDED">角丸</option>';
@@ -621,7 +657,6 @@ function editorPane(detail, ctx) {
     } catch (e) { ctx.toast('CSS を更新できませんでした: ' + (e.message || e)); }
   };
 
-  subhead(detail, 'HTML エディタ');
   const wrapBox = row(detail, 'HTML エディタの長い行');
   const wrap = document.createElement('select');
   wrap.innerHTML = '<option value="on">折り返す</option><option value="off">折り返さない (横にスクロール)</option>';
@@ -633,7 +668,6 @@ function editorPane(detail, ctx) {
   wrapHint.textContent = '折り返すと、2 行目以降はインデントの位置に揃いません (入力欄の仕組み上)。インデントを崩したくない場合は「折り返さない」を選んでください。';
   wrapBox.appendChild(wrapHint);
 
-  subhead(detail, 'プレビュー');
   const liveBox = row(detail, 'リアルタイムプレビュー');
   const live = document.createElement('select');
   live.innerHTML = '<option value="on">打つたびに更新</option><option value="off">手動で更新</option>';
@@ -1234,7 +1268,6 @@ async function aiPane(detail, ctx) {
 }
 
 function appearancePane(detail, ctx) {
-  subhead(detail, 'プレビューの大きさ');
   const minBox = row(detail, 'プレビューの最小幅（px）');
   const min = document.createElement('input');
   min.type = 'number';
@@ -1260,7 +1293,6 @@ function appearancePane(detail, ctx) {
   cssLine.append(openCss, inspect, cssPath);
   cssBox.appendChild(cssLine);
 
-  subhead(detail, 'カード');
   const zoomBox = row(detail, 'カードの文字サイズ (%)');
   const zoom = document.createElement('input');
   zoom.type = 'number';
@@ -1336,134 +1368,67 @@ async function trashPane(detail, ctx) {
 async function backupPane(detail, ctx) {
   const dir = prefs.getItem('backupDir');
 
-  // ---- データの流れの模式図 ----
-  subhead(detail, 'iOS 版との同期');
-  const figBox = row(detail, 'Carrel のデータは次のように流れます。Anki のコレクションが正本で、iCloud Drive は iPhone との受け渡し用の写しです');
-  figBox.appendChild(syncFigure());
   await syncRows(detail, ctx);
 
-  // ---- 保存先 ----
-  subhead(detail, 'バックアップ');
-  const dirBox = row(detail,
-    'コレクションの控えを、選んだフォルダに書き出します。' +
-    'iCloud Drive や Dropbox のフォルダを選べば、そのままクラウドに置けます');
-  const dirLine = document.createElement('div');
-  dirLine.className = 'pick-line';
-  const pick = document.createElement('button');
-  pick.className = 'pill ghost';
-  pick.textContent = '保存先を選ぶ';
+  // ---- バックアップ ----
+  const box = card(detail, 'バックアップ');
+  const pick = pillButton(dir ? '変更…' : '選ぶ…', 'ghost');
   pick.onclick = async () => {
     const chosen = await window.anki.backupPick();
     if (chosen) { prefs.setItem('backupDir', chosen); ctx.reload(); }
   };
-  const path = document.createElement('span');
-  path.className = 'pick-path';
-  path.textContent = dir || '未設定';
-  dirLine.append(pick, path);
-  dirBox.appendChild(dirLine);
+  const where = document.createElement('span');
+  where.className = 'muted'; where.textContent = dir ? shortPath(dir) : '未設定';
+  line(box, '保存先', where, pick);
 
-  // ---- 保存先が決まるまで、以下は触れない ----
-  const rest = document.createElement('div');
-  rest.className = 'backup-rest' + (dir ? '' : ' locked');
-  detail.appendChild(rest);
+  if (dir) {
+    const auto = switchInput(prefs.getItem('backupAuto') === '1');
+    line(box, '自動でバックアップ', auto);
+    const every = document.createElement('select');
+    every.innerHTML = [
+      ['1h', '1 時間ごと'], ['3h', '3 時間ごと'], ['6h', '6 時間ごと'],
+      ['12h', '12 時間ごと'], ['1d', '1 日ごと'], ['3d', '3 日ごと'], ['1w', '1 週間ごと'],
+    ].map(([v, t]) => '<option value="' + v + '">' + t + '</option>').join('');
+    every.value = prefs.getItem('backupEvery') || '1d';
+    every.disabled = !auto.checked;
+    every.onchange = () => prefs.setItem('backupEvery', every.value);
+    const everyLine = line(box, '間隔', every);
+    everyLine.hidden = !auto.checked;
+    auto.onchange = () => {
+      prefs.setItem('backupAuto', auto.checked ? '1' : '0');
+      every.disabled = !auto.checked; everyLine.hidden = !auto.checked;
+    };
 
-  const autoBox = row(rest, '');
-  const label = document.createElement('label');
-  label.className = 'check-line';
-  const check = document.createElement('input');
-  check.type = 'checkbox';
-  check.checked = prefs.getItem('backupAuto') === '1';
-  const text = document.createElement('span');
-  text.textContent = '自動でバックアップを取る';
-  label.append(check, text);
-  autoBox.appendChild(label);
+    const keep = document.createElement('select');
+    keep.innerHTML = [[1, '最新の 1 本だけ'], [3, '最新の 3 本'], [5, '最新の 5 本'], [10, '最新の 10 本'], [30, '最新の 30 本']]
+      .map(([v, t]) => '<option value="' + v + '">' + t + '</option>').join('');
+    const saved = Number(prefs.getItem('backupKeep') || 1);
+    keep.value = [1, 3, 5, 10, 30].includes(saved) ? String(saved) : '5';
+    keep.onchange = () => prefs.setItem('backupKeep', keep.value);
+    line(box, '残す数', keep);
 
-  const everyBox = row(rest, '間隔');
-  const every = document.createElement('select');
-  every.innerHTML = [
-    ['1h', '1 時間ごと'], ['3h', '3 時間ごと'], ['6h', '6 時間ごと'],
-    ['12h', '12 時間ごと'], ['1d', '1 日ごと'], ['3d', '3 日ごと'], ['1w', '1 週間ごと'],
-  ].map(([v, t]) => `<option value="${v}">${t}</option>`).join('');
-  every.value = prefs.getItem('backupEvery') || '1d';
-  every.disabled = !check.checked;
-  every.onchange = () => prefs.setItem('backupEvery', every.value);
-  everyBox.appendChild(every);
+    const now = pillButton('今すぐバックアップ');
+    now.onclick = async () => {
+      now.disabled = true; now.textContent = '書き出しています…';
+      try { await ctx.backupNow(dir); ctx.toast('バックアップを取りました'); ctx.reload(); }
+      catch (e) { ctx.toast('取れません: ' + e.message); now.disabled = false; now.textContent = '今すぐバックアップ'; }
+    };
+    actions(box, now);
 
-  check.onchange = () => {
-    prefs.setItem('backupAuto', check.checked ? '1' : '0');
-    every.disabled = !check.checked;
-  };
-
-
-  const keepBox = row(rest, '残し方');
-  const mode = document.createElement('select');
-  mode.innerHTML =
-    '<option value="1">毎回置き換える（1 本だけ残す）</option>' +
-    '<option value="many">直近の何本かを残す</option>';
-  const count = document.createElement('input');
-  count.type = 'number';
-  count.min = '2';
-  count.style.marginLeft = '10px';
-  count.style.minWidth = '90px';
-  const saved = Number(prefs.getItem('backupKeep') || 1);
-  mode.value = saved > 1 ? 'many' : '1';
-  count.value = saved > 1 ? String(saved) : '5';
-  count.hidden = mode.value !== 'many';
-  mode.onchange = () => {
-    count.hidden = mode.value !== 'many';
-    prefs.setItem('backupKeep', mode.value === 'many' ? count.value : '1');
-  };
-  count.onchange = () => {
-    const n = Math.max(2, Number(count.value) || 2);
-    count.value = String(n);
-    prefs.setItem('backupKeep', String(n));
-  };
-  const keepLine = document.createElement('div');
-  keepLine.className = 'pick-line';
-  keepLine.append(mode, count);
-  keepBox.appendChild(keepLine);
-
-  const nowBox = row(rest, '');
-  const now = document.createElement('button');
-  now.className = 'pill';
-  now.textContent = '手動バックアップ';
-  now.onclick = async () => {
-    now.textContent = '書き出しています…';
-    try {
-      await ctx.backupNow(prefs.getItem('backupDir'));
-      ctx.toast('控えを取りました');
-      ctx.reload();
-    } catch (e) {
-      ctx.toast('取れません: ' + e.message);
-      now.textContent = '手動バックアップ';
+    // ---- いまあるバックアップ ----
+    const files = await window.anki.backupList(dir);
+    if (files.length) {
+      const list = card(detail, 'バックアップの一覧');
+      for (const f of files) {
+        const m = /anki_backup_(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})(\d{2})/.exec(f.name);
+        const when = m ? m[1] + '/' + m[2] + '/' + m[3] + ' ' + m[4] + ':' + m[5] : f.name;
+        const size = document.createElement('span');
+        size.className = 'muted'; size.textContent = (f.size / 1048576).toFixed(1) + ' MB';
+        const open = pillButton('戻す…', 'ghost');
+        open.onclick = () => restorePane(detail, ctx, dir + '/' + f.name);
+        line(list, when, size, open);
+      }
     }
-  };
-  nowBox.appendChild(now);
-
-  // ---- いまある控え ----
-  if (!dir) return;
-  const listBox = row(rest, 'いまあるバックアップ');
-  const files = await window.anki.backupList(dir);
-  if (!files.length) { listBox.appendChild(document.createTextNode('まだありません')); return; }
-  for (const f of files) {
-    const line = document.createElement('div');
-    line.className = 'trash-line';
-    const open = document.createElement('button');
-    open.className = 'pill ghost';
-    open.textContent = 'ここから戻す';
-    open.onclick = () => restorePane(detail, ctx, `${dir}/${f.name}`);
-    const when = document.createElement('span');
-    when.className = 'when';
-    when.textContent = (f.size / 1048576).toFixed(1) + ' MB';
-    const name = document.createElement('span');
-    name.className = 'what';
-    // anki_backup_20260828_203105 → 2026/08/28 20:31:05
-    const m = /anki_backup_(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})(\d{2})/.exec(f.name);
-    name.textContent = m
-      ? `${f.name}（${m[1]}/${m[2]}/${m[3]} ${m[4]}:${m[5]}:${m[6]}）`
-      : f.name;
-    line.append(when, name, open);
-    listBox.appendChild(line);
   }
 }
 
