@@ -399,6 +399,10 @@ struct NoteListView: View {
             }
         }
         .listStyle(.plain)
+        // 見開き (サイドバー) でも iPhone 幅と同じ地の色にする。サイドバー列は既定では灰色がかった別の色になり、
+        // 検索バー裏のグラデーションが浮いて見えるため
+        .scrollContentBackground(.hidden)
+        .background(Color(.systemBackground))
         // デッキ・学習状況・タグの帯は検索バーの直下に固定 (macOS 版と同じ)
         .safeAreaInset(edge: .top, spacing: 0) {
             if !store.allTags.isEmpty || !store.decks.isEmpty {
