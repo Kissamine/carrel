@@ -13,7 +13,8 @@ struct NoteEditorView: View {
     @State private var fields: [String] = []
     /// 開いたときの本文 (変えていない欄は元の HTML のまま保存する)
     @State private var original: [String] = []
-    @State private var tagText = ""
+    @State private var tags: [String] = []
+    @State private var newTag = ""
     /// text = 文章として編集 (改行はそのまま) / html = HTML をそのまま編集
     @State private var mode = "text"
     @FocusState private var focusedField: Int?
@@ -57,7 +58,6 @@ struct NoteEditorView: View {
                         ForEach(store.decks) { d in Text(d.name).tag(d.id) }
                     }
                 }
-                .padding(.top, 14)   // 題との間を少しあける
                 Section {
                     Picker("編集モード", selection: $mode) {
                         Text("テキスト").tag("text")
@@ -82,15 +82,35 @@ struct NoteEditorView: View {
                     }
                 }
                 Section {
-                    TextField("スペース区切り", text: $tagText)
-                        .autocorrectionDisabled()
-                        .textInputAutocapitalization(.never)
+                    if !tags.isEmpty {
+                        TagChips(tags: tags, wrap: true) { t in tags.removeAll { $0 == t } }
+                            .padding(.vertical, 2)
+                    }
+                    HStack {
+                        TextField("新しいタグを入力", text: $newTag)
+                            .autocorrectionDisabled()
+                            .textInputAutocapitalization(.never)
+                            .submitLabel(.done)
+                            .onSubmit(addTypedTag)
+                        if !newTag.trimmingCharacters(in: .whitespaces).isEmpty {
+                            Button { addTypedTag() } label: { Image(systemName: "plus.circle.fill") }
+                                .buttonStyle(.plain)
+                        }
+                        // 既存のタグから選ぶ
+                        let candidates = store.allTags.map(\.0).filter { !tags.contains($0) }
+                        if !candidates.isEmpty {
+                            Menu {
+                                ForEach(candidates.prefix(40), id: \.self) { t in Button(t) { tags.append(t) } }
+                            } label: { Image(systemName: "tag.circle").imageScale(.large) }
+                        }
+                    }
                 } header: { Text("タグ") } footer: {
                     Text(note == nil
                          ? "作ったカードは同期フォルダに自動で保存され、macOS 版 Carrel や Anki でも使えます。本文は HTML としてそのまま保存されます (改行は <br>)。"
                          : "本文は HTML のまま編集します。変更は同期フォルダへ自動で保存されます。")
                 }
             }
+            .contentMargins(.top, 18, for: .scrollContent)   // 題とのあいだを少しあける
             .navigationTitle(note == nil ? "新しいカード" : "カードを編集")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -110,14 +130,14 @@ struct NoteEditorView: View {
             deckId = store.noteDecks[note.id] ?? store.decks.first?.id ?? 1
             fields = note.fields
             original = note.fields
-            tagText = note.tags.joined(separator: " ")
+            tags = note.tags
         } else {
             notetypeId = store.notetypes.values.sorted { $0.name < $1.name }.first?.id ?? 0
             if let sel = store.selectedNote { notetypeId = sel.notetypeId; deckId = store.noteDecks[sel.id] ?? 0 }
             if deckId == 0 { deckId = store.selectedDeck ?? store.decks.first?.id ?? 1 }
             resizeFields()
             original = fields
-            tagText = store.selectedTags.joined(separator: " ")
+            tags = Array(store.selectedTags)
             focusedField = 0
         }
         mode = store.editorMode == "html" ? "html" : "text"
@@ -144,13 +164,19 @@ struct NoteEditorView: View {
         if fields.count > n { fields = Array(fields.prefix(n)) }
     }
 
+    private func addTypedTag() {
+        let t = newTag.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: " ", with: "_")
+        guard !t.isEmpty else { return }
+        if !tags.contains(t) { tags.append(t) }
+        newTag = ""
+    }
+
     private func save() {
         // テキストモード: 変えていない欄は元の HTML のまま、変えた欄だけ文章 → HTML に
         let body: [String] = mode == "html" ? fields : fields.enumerated().map { i, t in
             if i < original.count, Self.toText(original[i]) == t { return original[i] }
             return Self.toHTML(t)
         }
-        let tags = tagText.split(whereSeparator: { $0 == " " || $0 == "　" }).map(String.init)
         if let note { store.updateNote(note, fields: body, tags: tags) }
         else { store.addNote(notetypeId: notetypeId, deckId: deckId, fields: body, tags: tags) }
         dismiss()
