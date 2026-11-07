@@ -4,10 +4,12 @@ struct ContentView: View {
     @EnvironmentObject var store: Store
     @State private var showSettings = false
     @State private var columns = NavigationSplitViewVisibility.all
+    // サイドバー列の中では幅クラスが常にコンパクトになるので、画面全体の幅クラスをここで見る
+    @Environment(\.horizontalSizeClass) private var sizeClass
 
     var body: some View {
         NavigationSplitView(columnVisibility: $columns) {
-            NoteListView(showSettings: $showSettings)
+            NoteListView(showSettings: $showSettings, wide: sizeClass == .regular)
         } detail: {
             DetailView(showSettings: $showSettings)
         }
@@ -268,6 +270,29 @@ struct ZoomableImage: UIViewRepresentable {
 struct NoteListView: View {
     @EnvironmentObject var store: Store
     @Binding var showSettings: Bool
+    /// 横に広い画面 (Duo を開いたとき・iPad) か
+    var wide: Bool
+
+    /// 並び・設定などのメニュー。Duo のように横に広い (サイドバーが出る) ときは下側に置く
+    private var optionsMenu: some View {
+        Menu {
+            Picker("並び", selection: $store.sortMode) {
+                Label("名前", systemImage: "textformat").tag("name")
+                Label("更新が新しい順", systemImage: "clock").tag("modified")
+                Label("作成が新しい順", systemImage: "plus.circle").tag("created")
+                Label("期限が近い順", systemImage: "calendar").tag("due")
+                Label("復習回数が多い順", systemImage: "repeat").tag("reps")
+                Label("忘れやすい順", systemImage: "exclamationmark.triangle").tag("lapses")
+            }
+            Divider()
+            Button { store.pickRandom() } label: { Label("ランダムに開く", systemImage: "shuffle") }
+            if store.hasActiveFilter {
+                Button { store.clearFilters() } label: { Label("絞り込みを解除", systemImage: "xmark.circle") }
+            }
+            Divider()
+            Button { showSettings = true } label: { Label("設定・取り込み", systemImage: "gearshape") }
+        } label: { Image(systemName: "ellipsis.circle") }
+    }
 
     var body: some View {
         List(selection: $store.selectedNoteId) {
@@ -281,36 +306,32 @@ struct NoteListView: View {
             if !store.allTags.isEmpty || !store.decks.isEmpty {
                 filters
                     .padding(.vertical, 6)
-                    .background(.bar)
+                    // 検索バーごと覆う地。上は不透明で、帯の下端で透明になる
+                    .background {
+                        LinearGradient(
+                            stops: [.init(color: Color(.systemBackground), location: 0),
+                                    .init(color: Color(.systemBackground).opacity(0.85), location: 0.55),
+                                    .init(color: Color(.systemBackground).opacity(0), location: 1)],
+                            startPoint: .top, endPoint: .bottom)
+                        .ignoresSafeArea(edges: .top)
+                    }
             }
         }
+        .toolbarBackground(.hidden, for: .navigationBar)
         .searchable(text: $store.keyword, placement: .navigationBarDrawer(displayMode: .always), prompt: "検索")
         .autocorrectionDisabled()
         .navigationTitle("Carrel")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .principal) { CarrelLogoView(height: 18) }
-            ToolbarItem(placement: .topBarTrailing) {
-                Menu {
-                    Picker("並び", selection: $store.sortMode) {
-                        Label("名前", systemImage: "textformat").tag("name")
-                        Label("更新が新しい順", systemImage: "clock").tag("modified")
-                        Label("作成が新しい順", systemImage: "plus.circle").tag("created")
-                        Label("期限が近い順", systemImage: "calendar").tag("due")
-                        Label("復習回数が多い順", systemImage: "repeat").tag("reps")
-                        Label("忘れやすい順", systemImage: "exclamationmark.triangle").tag("lapses")
-                    }
-                    Divider()
-                    Button { store.pickRandom() } label: { Label("ランダムに開く", systemImage: "shuffle") }
-                    if store.hasActiveFilter {
-                        Button { store.clearFilters() } label: { Label("絞り込みを解除", systemImage: "xmark.circle") }
-                    }
-                    Divider()
-                    Button { showSettings = true } label: { Label("設定・取り込み", systemImage: "gearshape") }
-                } label: { Image(systemName: "ellipsis.circle") }
+            if !wide {
+                ToolbarItem(placement: .topBarTrailing) { optionsMenu }
             }
             ToolbarItem(placement: .status) {
                 Text("\(store.filtered.count) 件").font(.footnote).foregroundStyle(.secondary).fixedSize()
+            }
+            if wide {
+                ToolbarItem(placement: .bottomBar) { optionsMenu }
             }
         }
         .safeAreaInset(edge: .bottom) {
