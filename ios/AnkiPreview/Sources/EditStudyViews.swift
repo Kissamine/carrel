@@ -523,7 +523,7 @@ struct TutorialView: View {
     private struct Page { let title: String; let body: String; let color: Color }
     private let pages: [Page] = [
         Page(title: "Carrel へようこそ",
-             body: "暗記カードを、見て・学んで・作れるアプリ。英単語、資格試験、医学など、覚えたいことは何でも。まずはサンプルのカードが 3 枚入っています。", color: .carrelBlue),
+             body: "暗記カードを、見て・学んで・作れるアプリ。英単語、資格試験、歴史など、覚えたいことは何でも。まずはサンプルのカードが 3 枚入っています。", color: .carrelBlue),
         Page(title: "カードを見る",
              body: "一覧からカードを選ぶと内容が表示されます。右上の「表 / 裏」で面を切り替え、タグや検索で絞り込めます。", color: .teal),
         Page(title: "学習する",
