@@ -1,0 +1,305 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		0AF4F64A6F3F447A90AD31F8 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B593FFFBACDA4D21B99D5E4B /* ContentView.swift */; };
+		17AD417793584692A10E1032 /* CollectionDB.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABB866C9B5C74E83B59D6CE6 /* CollectionDB.swift */; };
+		5D877987EDC6404B8DF3D5F4 /* Store.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF6794E44BE041CC98904916 /* Store.swift */; };
+		85E6BECD9B5A4E2988A62E45 /* PreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEF00138DF344BE3961D6087 /* PreviewView.swift */; };
+		A1B2C3D4E5F60718293A4B5C /* AnkiWebSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2C3D4E5F60718293A4B5C6D /* AnkiWebSync.swift */; };
+		E3E3E3E3E3E3E3E3E3E3E3E3 /* CarrelLogo.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4F4F4F4F4F4F4F4F4F4F4F4 /* CarrelLogo.swift */; };
+		B4ABD1C54EAA4AAF82398AE3 /* AnkiPreviewApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4533B98926BA4F0F9296BC7E /* AnkiPreviewApp.swift */; };
+		DC5D6149B3CA4C2B910B5612 /* TemplateRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 634417D0D49D44E6B932749B /* TemplateRenderer.swift */; };
+		E1533307B3B24D8DB654F0FD /* Protobuf.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68485015D6D5471997614638 /* Protobuf.swift */; };
+		F9F82686C8784DC7B1714977 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 614B9E279DBE4943AC977180 /* Assets.xcassets */; };
+		C1C1C1C1C1C1C1C1C1C1C1C1 /* Carrel.icon in Resources */ = {isa = PBXBuildFile; fileRef = D2D2D2D2D2D2D2D2D2D2D2D2 /* Carrel.icon */; };
+		FEAE65CCCD354C98977892ED /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF7AF99FA07D42FFAFDE12D9 /* Models.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		4533B98926BA4F0F9296BC7E /* AnkiPreviewApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnkiPreviewApp.swift; sourceTree = "<group>"; };
+		614B9E279DBE4943AC977180 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		D2D2D2D2D2D2D2D2D2D2D2D2 /* Carrel.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = Carrel.icon; sourceTree = "<group>"; };
+		634417D0D49D44E6B932749B /* TemplateRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TemplateRenderer.swift; sourceTree = "<group>"; };
+		68485015D6D5471997614638 /* Protobuf.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Protobuf.swift; sourceTree = "<group>"; };
+		76A6A1ECF8364BC1A58E8280 /* AnkiPreview.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AnkiPreview.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		ABB866C9B5C74E83B59D6CE6 /* CollectionDB.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CollectionDB.swift; sourceTree = "<group>"; };
+		AF6794E44BE041CC98904916 /* Store.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Store.swift; sourceTree = "<group>"; };
+		AF7AF99FA07D42FFAFDE12D9 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
+		B2C3D4E5F60718293A4B5C6D /* AnkiWebSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnkiWebSync.swift; sourceTree = "<group>"; };
+		F4F4F4F4F4F4F4F4F4F4F4F4 /* CarrelLogo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarrelLogo.swift; sourceTree = "<group>"; };
+		B593FFFBACDA4D21B99D5E4B /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		DEF00138DF344BE3961D6087 /* PreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewView.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		8F2628CD9499462CAE4695AD /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		2FF0F07A9D734BED8FEF2E62 /* Sources */ = {
+			isa = PBXGroup;
+			children = (
+				4533B98926BA4F0F9296BC7E /* AnkiPreviewApp.swift */,
+				ABB866C9B5C74E83B59D6CE6 /* CollectionDB.swift */,
+				B593FFFBACDA4D21B99D5E4B /* ContentView.swift */,
+				AF7AF99FA07D42FFAFDE12D9 /* Models.swift */,
+				DEF00138DF344BE3961D6087 /* PreviewView.swift */,
+				68485015D6D5471997614638 /* Protobuf.swift */,
+				AF6794E44BE041CC98904916 /* Store.swift */,
+				B2C3D4E5F60718293A4B5C6D /* AnkiWebSync.swift */,
+				F4F4F4F4F4F4F4F4F4F4F4F4 /* CarrelLogo.swift */,
+				634417D0D49D44E6B932749B /* TemplateRenderer.swift */,
+			);
+			path = Sources;
+			sourceTree = "<group>";
+		};
+		6A86712C01A840B3925589D2 = {
+			isa = PBXGroup;
+			children = (
+				2FF0F07A9D734BED8FEF2E62 /* Sources */,
+				614B9E279DBE4943AC977180 /* Assets.xcassets */,
+				D2D2D2D2D2D2D2D2D2D2D2D2 /* Carrel.icon */,
+				7393CA08E1234700A1D5E014 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		7393CA08E1234700A1D5E014 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				76A6A1ECF8364BC1A58E8280 /* AnkiPreview.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		DC6278765E70456DB9EA31E6 /* AnkiPreview */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 864D331299F14F0FAC99E6CB /* Build configuration list for PBXNativeTarget "AnkiPreview" */;
+			buildPhases = (
+				159E4E56EEBC41B89AC3C330 /* Sources */,
+				8F2628CD9499462CAE4695AD /* Frameworks */,
+				1DD1EF086E0648CF83EE20B6 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = AnkiPreview;
+			productName = AnkiPreview;
+			productReference = 76A6A1ECF8364BC1A58E8280 /* AnkiPreview.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		1169D113AD614BA3B6BA23E8 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1600;
+				LastUpgradeCheck = 1600;
+				TargetAttributes = {
+					DC6278765E70456DB9EA31E6 = {
+						CreatedOnToolsVersion = 16.0;
+					};
+				};
+			};
+			buildConfigurationList = FBF60C4F52C14A68B24F043A /* Build configuration list for PBXProject "AnkiPreview" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = ja;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				ja,
+				en,
+				Base,
+			);
+			mainGroup = 6A86712C01A840B3925589D2;
+			productRefGroup = 7393CA08E1234700A1D5E014 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				DC6278765E70456DB9EA31E6 /* AnkiPreview */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		1DD1EF086E0648CF83EE20B6 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F9F82686C8784DC7B1714977 /* Assets.xcassets in Resources */,
+				C1C1C1C1C1C1C1C1C1C1C1C1 /* Carrel.icon in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		159E4E56EEBC41B89AC3C330 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B4ABD1C54EAA4AAF82398AE3 /* AnkiPreviewApp.swift in Sources */,
+				17AD417793584692A10E1032 /* CollectionDB.swift in Sources */,
+				0AF4F64A6F3F447A90AD31F8 /* ContentView.swift in Sources */,
+				FEAE65CCCD354C98977892ED /* Models.swift in Sources */,
+				85E6BECD9B5A4E2988A62E45 /* PreviewView.swift in Sources */,
+				E1533307B3B24D8DB654F0FD /* Protobuf.swift in Sources */,
+				5D877987EDC6404B8DF3D5F4 /* Store.swift in Sources */,
+				A1B2C3D4E5F60718293A4B5C /* AnkiWebSync.swift in Sources */,
+				E3E3E3E3E3E3E3E3E3E3E3E3 /* CarrelLogo.swift in Sources */,
+				DC5D6149B3CA4C2B910B5612 /* TemplateRenderer.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		0D5EACD6787342AF9C9EB318 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		41F6E52927724CCCA4FDF6A1 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_TESTABILITY = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		4EF1729A645647A0B47D58E6 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = Carrel;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 3ZRH7F9828;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "Carrel";
+				INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace = YES;
+				INFOPLIST_KEY_NSAppTransportSecurity_NSAllowsArbitraryLoads = YES;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UIFileSharingEnabled = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportsDocumentBrowser = NO;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.haru.ankipreview;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		C4B9D093D2C44BBA9BDD80A2 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = Carrel;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 3ZRH7F9828;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "Carrel";
+				INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace = YES;
+				INFOPLIST_KEY_NSAppTransportSecurity_NSAllowsArbitraryLoads = YES;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UIFileSharingEnabled = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportsDocumentBrowser = NO;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.haru.ankipreview;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		864D331299F14F0FAC99E6CB /* Build configuration list for PBXNativeTarget "AnkiPreview" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C4B9D093D2C44BBA9BDD80A2 /* Debug */,
+				4EF1729A645647A0B47D58E6 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		FBF60C4F52C14A68B24F043A /* Build configuration list for PBXProject "AnkiPreview" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				41F6E52927724CCCA4FDF6A1 /* Debug */,
+				0D5EACD6787342AF9C9EB318 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 1169D113AD614BA3B6BA23E8 /* Project object */;
+}

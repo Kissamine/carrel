@@ -1,0 +1,82 @@
+{
+  "fill": "automatic",
+  "groups": [
+    {
+      "layers": [
+        {
+          "image-name": "C.svg",
+          "name": "C",
+          "fill": {
+            "linear-gradient": [
+              "display-p3:0.21176,0.79608,0.89412,1.00000",
+              "display-p3:0.05490,0.49804,0.76863,1.00000"
+            ],
+            "orientation": {
+              "start": {
+                "x": -0.5,
+                "y": 0.5
+              },
+              "stop": {
+                "x": 0.5,
+                "y": -0.5
+              }
+            }
+          },
+          "fill-specializations": [
+            {
+              "value": {
+                "linear-gradient": [
+                  "display-p3:0.21176,0.79608,0.89412,1.00000",
+                  "display-p3:0.05490,0.49804,0.76863,1.00000"
+                ],
+                "orientation": {
+                  "start": {
+                    "x": -0.5,
+                    "y": 0.5
+                  },
+                  "stop": {
+                    "x": 0.5,
+                    "y": -0.5
+                  }
+                }
+              }
+            },
+            {
+              "appearance": "dark",
+              "value": {
+                "linear-gradient": [
+                  "display-p3:0.21176,0.79608,0.89412,1.00000",
+                  "display-p3:0.05490,0.49804,0.76863,1.00000"
+                ],
+                "orientation": {
+                  "start": {
+                    "x": -0.5,
+                    "y": 0.5
+                  },
+                  "stop": {
+                    "x": 0.5,
+                    "y": -0.5
+                  }
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.5
+      },
+      "translucency": {
+        "enabled": true,
+        "value": 0.5
+      }
+    }
+  ],
+  "supported-platforms": {
+    "circles": [
+      "watchOS"
+    ],
+    "squares": "shared"
+  }
+}

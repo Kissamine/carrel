@@ -1,5 +1,6 @@
-# ビルド成果物
+# ビルド成果物 (electron/build はアイコンなどの素材なので除外しない)
 build/
+!electron/build/
 .gradle/
 .kotlin/
 app/build/
@@ -21,3 +22,13 @@ keystore.properties
 .idea/
 .DS_Store
 local.properties
+
+# Electron / iOS のビルド成果物
+electron/node_modules/
+electron/dist/
+electron/renderer/vendor/cm.bundle.js
+ios/AnkiPreview/build/
+ios/AnkiPreview/build-device/
+*.xcuserstate
+xcuserdata/
+macos/hs_err_pid*.log

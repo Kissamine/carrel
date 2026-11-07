@@ -1,5 +1,10 @@
 package com.haru.ankieditor
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.foundation.layout.size
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -68,6 +73,10 @@ fun SettingsScreen(
      * Android では BackHandler を渡す。戻るという概念がない環境では何も渡さなくてよい
      */
     backHandler: @Composable (() -> Unit) -> Unit = {},
+    /** 呼び出し元が自前の見出しを持つとき (macOS のシート) は false */
+    showTopBar: Boolean = true,
+    /** macOS のシステム設定に寄せた見た目にする */
+    macStyle: Boolean = false,
 ) {
     var section by remember { mutableStateOf<SettingsSection?>(if (twoPane) SettingsSection.ACCOUNT else null) }
 
@@ -78,6 +87,7 @@ fun SettingsScreen(
 
     Scaffold(
         topBar = {
+            if (!showTopBar) return@Scaffold
             TopAppBar(
                 title = {
                     Text(if (!twoPane && section != null) section!!.title else "設定")
@@ -98,7 +108,15 @@ fun SettingsScreen(
                     selected = section,
                     summaryOf = summaryOf,
                     onSelect = { section = it },
-                    modifier = Modifier.width(280.dp).fillMaxHeight(),
+                    macStyle = macStyle,
+                    modifier = Modifier
+                        .width(if (macStyle) 210.dp else 280.dp)
+                        .fillMaxHeight()
+                        .then(
+                            if (macStyle) {
+                                Modifier.background(MaterialTheme.colorScheme.surfaceContainerLow)
+                            } else Modifier
+                        ),
                 )
                 VerticalDivider()
                 Column(
@@ -109,7 +127,14 @@ fun SettingsScreen(
                         .padding(20.dp)
                 ) {
                     section?.let {
-                        Text(it.title, style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            it.title,
+                            style = if (macStyle) {
+                                MaterialTheme.typography.titleSmall.copy(
+                                    fontWeight = FontWeight.SemiBold,
+                                )
+                            } else MaterialTheme.typography.titleMedium,
+                        )
                         Spacer(Modifier.height(12.dp))
                         detail(it)
                     }
@@ -159,8 +184,49 @@ private fun SectionList(
     summaryOf: (SettingsSection) -> String,
     onSelect: (SettingsSection) -> Unit,
     modifier: Modifier = Modifier,
+    macStyle: Boolean = false,
 ) {
     Column(modifier.verticalScroll(rememberScrollState())) {
+        if (macStyle) {
+            // macOS のシステム設定の並び。角丸の選択帯・小さめの文字・要約や矢印は出さない
+            SettingsSection.entries.forEach { s ->
+                val isSelected = s == selected
+                Surface(
+                    onClick = { onSelect(s) },
+                    shape = RoundedCornerShape(6.dp),
+                    color = if (isSelected) {
+                        MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
+                    } else Color.Transparent,
+                    contentColor = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp, vertical = 1.dp),
+                ) {
+                    Row(
+                        Modifier.padding(horizontal = 8.dp, vertical = 7.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Icon(
+                            s.icon,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = if (isSelected) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Text(
+                            s.title,
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                fontFeatureSettings = "palt",
+                            ),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+            }
+            return@Column
+        }
         SettingsSection.entries.forEach { s ->
             val isSelected = s == selected
             ListItem(

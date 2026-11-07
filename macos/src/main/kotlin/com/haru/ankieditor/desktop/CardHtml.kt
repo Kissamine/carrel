@@ -37,7 +37,11 @@ object CardHtml {
           .anki-bar {
             position: fixed; right: 16px; bottom: 16px; display: flex; gap: 12px;
             align-items: center; z-index: 2147483000;
+            transition: opacity .12s ease;
           }
+          /* ウインドウのリサイズ中は Chromium の追従が一拍遅れ、
+             端のボタンが窓からはみ出して見える。動かしている間だけ隠す */
+          html.anki-resizing .anki-bar { opacity: 0; transition: none; }
           .anki-fab {
             width: 48px; height: 48px; border: 0; border-radius: 50%; cursor: pointer;
             display: flex; align-items: center; justify-content: center;
@@ -50,7 +54,14 @@ object CardHtml {
           .anki-fab.find { background: #3C4858; } .anki-fab.find svg { fill: #D8E3F8; }
           .anki-fab.edit { background: #3C4858; } .anki-fab.edit svg { fill: #D8E3F8; }
           .anki-fab.refresh { background: #234C56; }
-          .anki-fab.refresh svg { fill: #BFE9F6; }
+          /* 手動更新は見つけやすいよう、記号だけ大きめに */
+          .anki-fab.refresh svg { fill: #BFE9F6; width: 27px; height: 27px; }
+
+          /* 上端をぼかして、ウインドウの帯となじませる */
+          .anki-topfade {
+            position: fixed; left: 0; right: 0; top: 0; height: 20px;
+            z-index: 2147482000; pointer-events: none;
+          }
 
           .anki-find {
             position: fixed; top: 12px; left: 50%;
@@ -60,13 +71,17 @@ object CardHtml {
             transition: transform .24s cubic-bezier(.2,.8,.2,1), opacity .18s ease;
             background: #272B2F; color: #E1E2E8; border-radius: 50px; height: 52px;
             padding: 0 6px 0 16px; box-shadow: 0 8px 24px rgba(0,0,0,.45);
+            /* プレビューが狭いときも、その 80% を越えないようにする */
+            max-width: 80%; box-sizing: border-box;
             font-family: -apple-system, BlinkMacSystemFont, sans-serif;
           }
           .anki-find.open { transform: translate(-50%, 0); opacity: 1; pointer-events: auto; }
           .anki-find input {
             background: transparent; border: 0; outline: none; color: #E1E2E8;
-            font-size: 14px; width: 180px;
+            font-size: 14px; width: 180px; min-width: 0; flex: 1 1 auto;
           }
+          .anki-find .count { flex: 0 0 auto; }
+          .anki-find button { flex: 0 0 auto; }
           .anki-find .count { font-size: 12px; color: #C1C7CE; min-width: 34px; text-align: center; }
           .anki-find button {
             width: 34px; height: 34px; border: 0; border-radius: 50%; background: transparent;
@@ -74,6 +89,7 @@ object CardHtml {
           }
           .anki-find button:hover { background: rgba(255,255,255,.08); }
         </style>
+        <div class="anki-topfade" id="ankiTopFade"></div>
         <div class="anki-find" id="ankiFind">
           <span style="opacity:.6">⌕</span>
           <input id="ankiFindInput" placeholder="カード内を検索">
@@ -110,6 +126,15 @@ object CardHtml {
             input.focus();
             input.select();
           }
+          // ぼかしの色は、そのカードの地色から取る
+          (function () {
+            var fade = byId('ankiTopFade');
+            if (!fade) return;
+            var bg = getComputedStyle(document.body).backgroundColor || '#2C2C2C';
+            var clear = bg.replace('rgb(', 'rgba(').replace(')', ', 0)');
+            if (clear === bg) clear = 'transparent';
+            fade.style.background = 'linear-gradient(to bottom, ' + bg + ' 35%, ' + clear + ')';
+          })();
           window.__ankiFindOpen = openFind;
           var open = byId('ankiFindOpen');
           if (open) open.addEventListener('click', openFind);
@@ -169,6 +194,9 @@ object CardHtml {
         img:not([class]), img[class=""] { display: block; }
         img, table, pre, iframe, video { max-width: 100%; }
         body { overflow-x: hidden; }
+        /* プレビュー全体の余白をほんの少し広げる。
+           ノートタイプ側の padding は残したいので、透明な border で足す */
+        body.card { border: 6px solid transparent; border-left-width: 10px; border-right-width: 10px; }
         </style>
         </head>
         <body class="card">

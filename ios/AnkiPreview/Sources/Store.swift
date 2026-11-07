@@ -1,0 +1,464 @@
+import Foundation
+import SwiftUI
+import Combine
+
+/// 検索欄の文字列を分解したもの。スペース区切りで AND、"-語" で除外、tag: / deck: で絞り込み、"…" で句
+struct SearchQuery {
+    var terms: [String] = []
+    var excluded: [String] = []
+    var tags: [String] = []
+    var decks: [String] = []
+    var isEmpty: Bool { terms.isEmpty && excluded.isEmpty && tags.isEmpty && decks.isEmpty }
+
+    static func parse(_ s: String) -> SearchQuery {
+        var q = SearchQuery()
+        var tokens: [String] = []
+        var cur = ""
+        var inQuote = false
+        for ch in s {
+            if ch == "\"" { inQuote.toggle(); continue }
+            if (ch == " " || ch == "\u{3000}") && !inQuote {
+                if !cur.isEmpty { tokens.append(cur); cur = "" }
+                continue
+            }
+            cur.append(ch)
+        }
+        if !cur.isEmpty { tokens.append(cur) }
+        for t in tokens {
+            let low = t.lowercased()
+            if low.hasPrefix("tag:"), low.count > 4 { q.tags.append(String(low.dropFirst(4))) }
+            else if low.hasPrefix("deck:"), low.count > 5 { q.decks.append(String(low.dropFirst(5))) }
+            else if low.hasPrefix("-"), low.count > 1 { q.excluded.append(String(low.dropFirst())) }
+            else { q.terms.append(low) }
+        }
+        return q
+    }
+}
+
+/// アプリ全体の状態。コレクションの取り込み・読み込み・絞り込み・選択
+@MainActor
+final class Store: ObservableObject {
+    @Published var notes: [Note] = []
+    @Published var notetypes: [Int64: Notetype] = [:]
+    @Published var decks: [Deck] = []
+    @Published var noteDecks: [Int64: Int64] = [:]
+    @Published var cards: [Int64: [CardInfo]] = [:]
+    @Published var crt: Int64 = 0
+    // 検索条件は次に開いたときも残す (macOS 版と同じ)
+    @Published var keyword = UserDefaults.standard.string(forKey: "lastKeyword") ?? "" {
+        didSet { UserDefaults.standard.set(keyword, forKey: "lastKeyword") }
+    }
+    @Published var selectedTags: Set<String> = Set(UserDefaults.standard.stringArray(forKey: "lastTags") ?? []) {
+        didSet { UserDefaults.standard.set(Array(selectedTags), forKey: "lastTags") }
+    }
+    @Published var selectedDeck: Int64? = Int64(UserDefaults.standard.string(forKey: "defaultDeck") ?? "") {
+        didSet { UserDefaults.standard.set(selectedDeck.map(String.init) ?? "", forKey: "defaultDeck") }
+    }
+    /// 学習状況での絞り込み: all / due / new / review / suspended / flagged
+    @Published var statusFilter = UserDefaults.standard.string(forKey: "statusFilter") ?? "all" {
+        didSet { UserDefaults.standard.set(statusFilter, forKey: "statusFilter") }
+    }
+    // AnkiWeb
+    @Published var ankiwebKey: String? = Keychain.get("hostKey")
+    @Published var ankiwebUser: String = UserDefaults.standard.string(forKey: "ankiwebUser") ?? ""
+    @Published var syncing = false
+    @Published var syncStatus = ""
+    @Published var lastSync: Date? = UserDefaults.standard.object(forKey: "lastSync") as? Date
+    var loggedIn: Bool { !(ankiwebKey ?? "").isEmpty }
+    /// 選んでいるカード (次に開いたときも同じカードに戻る)
+    @Published var selectedNoteId: Int64? = {
+        let v = UserDefaults.standard.string(forKey: "selectedNoteId") ?? ""
+        return Int64(v)
+    }() {
+        didSet {
+            UserDefaults.standard.set(selectedNoteId.map(String.init) ?? "", forKey: "selectedNoteId")
+            if oldValue != selectedNoteId { templateIndex = 0; findText = "" }
+        }
+    }
+    /// 複数カードタイプのノートで、どのカードを見るか
+    @Published var templateIndex = 0
+    /// カード内検索
+    @Published var findText = ""
+    @Published var loading = false
+    @Published var error: String? = nil
+    @Published var importedAt: Date? = UserDefaults.standard.object(forKey: "importedAt") as? Date
+
+    @AppStorage("textZoom") var textZoom: Double = 1.0
+    @AppStorage("sortMode") var sortMode: String = "name"
+    /// 表示する面: front / back
+    @AppStorage("side") var side: String = "back"
+    @AppStorage("showTagsInList") var showTagsInList: Bool = true
+    @AppStorage("showDueInList") var showDueInList: Bool = true
+    /// 見た目: system / light / dark
+    @AppStorage("appearance") var appearance: String = "system"
+
+    /// 取り込んだコレクションの置き場所 (アプリの中)
+    static var dataDir: URL {
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        let dir = base.appendingPathComponent("collection", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }
+    static var collectionPath: URL { dataDir.appendingPathComponent("collection.anki2") }
+    static var mediaDir: URL { dataDir.appendingPathComponent("collection.media", isDirectory: true) }
+
+    var hasCollection: Bool { FileManager.default.fileExists(atPath: Self.collectionPath.path) }
+
+    init() { Task { await load() } }
+
+    /// collection.anki2 と collection.media のあるフォルダを取り込む
+    func importFolder(_ url: URL) async {
+        loading = true; error = nil
+        defer { loading = false }
+        let ok = url.startAccessingSecurityScopedResource()
+        defer { if ok { url.stopAccessingSecurityScopedResource() } }
+        let fm = FileManager.default
+        do {
+            // フォルダの中、または選んだものが .anki2 そのもの
+            var src = url
+            if url.pathExtension == "anki2" { src = url.deletingLastPathComponent() }
+            let col = src.appendingPathComponent("collection.anki2")
+            guard fm.fileExists(atPath: col.path) else {
+                throw NSError(domain: "AnkiPreview", code: 3, userInfo: [NSLocalizedDescriptionKey: "collection.anki2 が見つかりません"])
+            }
+            let tmp = Self.dataDir.appendingPathComponent("incoming", isDirectory: true)
+            try? fm.removeItem(at: tmp)
+            try fm.createDirectory(at: tmp, withIntermediateDirectories: true)
+            try fm.copyItem(at: col, to: tmp.appendingPathComponent("collection.anki2"))
+            for side in ["collection.anki2-wal", "collection.anki2-shm"] {
+                let f = src.appendingPathComponent(side)
+                if fm.fileExists(atPath: f.path) { try? fm.copyItem(at: f, to: tmp.appendingPathComponent(side)) }
+            }
+            let media = src.appendingPathComponent("collection.media")
+            if fm.fileExists(atPath: media.path) { try fm.copyItem(at: media, to: tmp.appendingPathComponent("collection.media")) }
+            // 入れ替え
+            for name in ["collection.anki2", "collection.anki2-wal", "collection.anki2-shm", "collection.media"] {
+                try? fm.removeItem(at: Self.dataDir.appendingPathComponent(name))
+                let from = tmp.appendingPathComponent(name)
+                if fm.fileExists(atPath: from.path) { try fm.moveItem(at: from, to: Self.dataDir.appendingPathComponent(name)) }
+            }
+            try? fm.removeItem(at: tmp)
+            importedAt = Date()
+            UserDefaults.standard.set(importedAt, forKey: "importedAt")
+            await load()
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
+    func load() async {
+        guard hasCollection else { return }
+        loading = true; error = nil
+        defer { loading = false }
+        let path = Self.collectionPath.path
+        do {
+            let result = try await Task.detached(priority: .userInitiated) { () throws -> ([Note], [Notetype], [Deck], [CardInfo], Int64) in
+                let db = try CollectionDB(path: path)
+                return (try db.notes(), try db.notetypes(), try db.decks(), try db.cards(), try db.creationTime())
+            }.value
+            notes = result.0
+            notetypes = Dictionary(uniqueKeysWithValues: result.1.map { ($0.id, $0) })
+            cards = Dictionary(grouping: result.3, by: { $0.noteId })
+            crt = result.4
+            var nd: [Int64: Int64] = [:]
+            for c in result.3 where nd[c.noteId] == nil { nd[c.noteId] = c.deckId }
+            noteDecks = nd
+            decks = result.2.filter { $0.name != "Default" || nd.values.contains($0.id) }
+            if let sel = selectedNoteId, !notes.contains(where: { $0.id == sel }) { selectedNoteId = nil }
+            if let d = selectedDeck, !decks.contains(where: { $0.id == d }) { selectedDeck = nil }
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
+    // ---- AnkiWeb ----
+
+    func ankiwebLogin(username: String, password: String) async throws {
+        let key = try await AnkiWebClient.login(username: username, password: password)
+        Keychain.set("hostKey", key)
+        ankiwebKey = key
+        ankiwebUser = username
+        UserDefaults.standard.set(username, forKey: "ankiwebUser")
+    }
+
+    func ankiwebLogout() {
+        Keychain.set("hostKey", nil)
+        ankiwebKey = nil
+        UserDefaults.standard.removeObject(forKey: "mediaUsn")
+    }
+
+    /// AnkiWeb からコレクションとメディアを取ってくる (こちらからは何も送らない)
+    func sync() async {
+        guard let key = ankiwebKey, !key.isEmpty, !syncing else { return }
+        syncing = true; error = nil
+        defer { syncing = false; syncStatus = "" }
+        let client = AnkiWebClient(hostKey: key)
+        let fm = FileManager.default
+        do {
+            syncStatus = "AnkiWeb に接続中…"
+            _ = try await client.meta()
+            syncStatus = "カードを受信中…"
+            let tmp = try await client.downloadCollection()
+            // 開けるか確かめてから入れ替える
+            let check = try await Task.detached { () throws -> Int in
+                let db = try CollectionDB(path: tmp.path)
+                return try db.notes().count
+            }.value
+            syncStatus = "\(check) 件のノートを保存中…"
+            for name in ["collection.anki2", "collection.anki2-wal", "collection.anki2-shm"] {
+                try? fm.removeItem(at: Self.dataDir.appendingPathComponent(name))
+            }
+            try fm.moveItem(at: tmp, to: Self.collectionPath)
+            importedAt = Date()
+            UserDefaults.standard.set(importedAt, forKey: "importedAt")
+            await load()
+
+            // メディア: 前回の usn から変わった分だけ
+            try fm.createDirectory(at: Self.mediaDir, withIntermediateDirectories: true)
+            let hasMedia = ((try? fm.contentsOfDirectory(atPath: Self.mediaDir.path)) ?? []).contains { !$0.hasPrefix("__") }
+            var lastUsn = hasMedia ? UserDefaults.standard.integer(forKey: "mediaUsn") : 0
+            syncStatus = "メディアを確認中…"
+            let serverUsn = try await client.mediaBegin()
+            var toGet: [String] = []
+            while lastUsn < serverUsn {
+                let changes = try await client.mediaChanges(since: lastUsn)
+                if changes.isEmpty { break }
+                for c in changes {
+                    if c.sha1.isEmpty { try? fm.removeItem(at: Self.mediaDir.appendingPathComponent(c.name)) }
+                    else { toGet.append(c.name) }
+                    lastUsn = max(lastUsn, c.usn)
+                }
+            }
+            toGet = Array(Set(toGet))
+            var done = 0
+            for chunk in stride(from: 0, to: toGet.count, by: 25).map({ Array(toGet[$0..<min($0 + 25, toGet.count)]) }) {
+                syncStatus = "メディアを受信中… \(done) / \(toGet.count)"
+                let files = try await client.downloadFiles(chunk)
+                for (name, data) in files {
+                    try? data.write(to: Self.mediaDir.appendingPathComponent(name.precomposedStringWithCanonicalMapping), options: .atomic)
+                }
+                done += chunk.count
+            }
+            UserDefaults.standard.set(max(lastUsn, serverUsn), forKey: "mediaUsn")
+            lastSync = Date()
+            UserDefaults.standard.set(lastSync, forKey: "lastSync")
+            await load()
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
+    // ---- 学習状況 ----
+
+    func deckName(for note: Note) -> String {
+        guard let d = noteDecks[note.id] else { return "" }
+        return decks.first { $0.id == d }?.name ?? ""
+    }
+
+    /// 今日の終わり (期限が今日までのものを「期限切れ」とみなす)
+    private var endOfToday: Date {
+        Calendar.current.date(byAdding: .day, value: 1, to: Calendar.current.startOfDay(for: Date())) ?? Date()
+    }
+
+    /// ノートの中でいちばん早い期限
+    func nextDue(for note: Note) -> Date? {
+        (cards[note.id] ?? []).compactMap { $0.dueDate(crt: crt) }.min()
+    }
+
+    func isDue(_ note: Note) -> Bool {
+        guard let d = nextDue(for: note) else { return false }
+        return d < endOfToday
+    }
+
+    /// 一覧の右端に出す短い状態 ("今日" "3日後" "期限切れ" "未学習" …)
+    func dueLabel(for note: Note) -> (text: String, color: Color)? {
+        let cs = cards[note.id] ?? []
+        guard !cs.isEmpty else { return nil }
+        if cs.allSatisfy({ $0.status == .suspended }) { return ("停止中", .secondary) }
+        if let d = nextDue(for: note) {
+            let days = Calendar.current.dateComponents([.day], from: Calendar.current.startOfDay(for: Date()), to: Calendar.current.startOfDay(for: d)).day ?? 0
+            if days < 0 { return ("期限切れ", .red) }
+            if days == 0 { return ("今日", .orange) }
+            if days < 30 { return ("\(days)日後", .secondary) }
+            if days < 365 { return ("\(days / 30)か月後", .secondary) }
+            return ("\(days / 365)年後", .secondary)
+        }
+        if cs.contains(where: { $0.status == .new }) { return ("未学習", .blue) }
+        return nil
+    }
+
+    static let flagColors: [Int: Color] = [1: .red, 2: .orange, 3: .green, 4: .blue, 5: .pink, 6: .teal, 7: .purple]
+    func flagColor(for note: Note) -> Color? {
+        guard let f = (cards[note.id] ?? []).map(\.flag).first(where: { $0 > 0 }) else { return nil }
+        return Self.flagColors[f]
+    }
+
+    // ---- 絞り込み ----
+
+    var allTags: [(String, Int)] {
+        var count: [String: Int] = [:]
+        for n in notes { for t in n.tags { count[t, default: 0] += 1 } }
+        return count.sorted { $0.value != $1.value ? $0.value > $1.value : $0.key < $1.key }
+    }
+
+    var query: SearchQuery { SearchQuery.parse(keyword) }
+
+    /// ハイライトする語 (検索欄の語 + カード内検索)
+    var highlightTerms: [String] {
+        var t = query.terms
+        let f = findText.trimmingCharacters(in: .whitespaces)
+        if !f.isEmpty { t.append(f) }
+        return t
+    }
+
+    private func matches(_ n: Note, _ q: SearchQuery) -> Bool {
+        if q.isEmpty { return true }
+        let text = n.plainLower
+        let tags = n.tags.map { $0.lowercased() }
+        for t in q.terms where !(text.contains(t) || tags.contains { $0.contains(t) }) { return false }
+        for t in q.excluded where text.contains(t) { return false }
+        for t in q.tags where !tags.contains(where: { $0.contains(t) }) { return false }
+        if !q.decks.isEmpty {
+            let d = deckName(for: n).lowercased()
+            for t in q.decks where !d.contains(t) { return false }
+        }
+        return true
+    }
+
+    private func passesStatus(_ n: Note) -> Bool {
+        let cs = cards[n.id] ?? []
+        switch statusFilter {
+        case "due": return isDue(n)
+        case "new": return cs.contains { $0.status == .new }
+        case "review": return cs.contains { $0.status == .review || $0.status == .learning }
+        case "suspended": return cs.contains { $0.status == .suspended }
+        case "flagged": return cs.contains { $0.flag > 0 }
+        default: return true
+        }
+    }
+
+    var filtered: [Note] {
+        let q = query
+        var list = notes.filter { n in
+            if let d = selectedDeck, noteDecks[n.id] != d { return false }
+            if !selectedTags.isEmpty, !selectedTags.isSubset(of: Set(n.tags)) { return false }
+            if !passesStatus(n) { return false }
+            return matches(n, q)
+        }
+        switch sortMode {
+        case "modified": list.sort { $0.modified > $1.modified }
+        case "created": list.sort { $0.id > $1.id }
+        case "due":
+            let far = Date.distantFuture
+            list.sort { (nextDue(for: $0) ?? far) < (nextDue(for: $1) ?? far) }
+        case "reps":
+            list.sort { (cards[$0.id] ?? []).reduce(0) { $0 + $1.reps } > (cards[$1.id] ?? []).reduce(0) { $0 + $1.reps } }
+        case "lapses":
+            list.sort { (cards[$0.id] ?? []).reduce(0) { $0 + $1.lapses } > (cards[$1.id] ?? []).reduce(0) { $0 + $1.lapses } }
+        default:
+            list.sort { Self.sortKey($0.titleLines.joined(separator: " ")) < Self.sortKey($1.titleLines.joined(separator: " ")) }
+        }
+        return list
+    }
+
+    var hasActiveFilter: Bool { selectedDeck != nil || !selectedTags.isEmpty || statusFilter != "all" }
+
+    func clearFilters() { selectedDeck = nil; selectedTags = []; statusFilter = "all"; keyword = "" }
+
+    /// 並べ替え用: 丸数字を 3 桁の数字に直す (macOS 版と同じ)
+    static func sortKey(_ text: String) -> String {
+        var out = ""
+        for ch in text.unicodeScalars {
+            let c = Int(ch.value)
+            var n: Int? = nil
+            if c >= 0x2460 && c <= 0x2473 { n = c - 0x2460 + 1 }
+            else if c >= 0x3251 && c <= 0x325F { n = c - 0x3251 + 21 }
+            else if c >= 0x32B1 && c <= 0x32BF { n = c - 0x32B1 + 36 }
+            else if c >= 0x2776 && c <= 0x277F { n = c - 0x2776 + 1 }
+            else if c >= 0x24EB && c <= 0x24F4 { n = c - 0x24EB + 11 }
+            else if c == 0x24EA || c == 0x24FF { n = 0 }
+            if let n { out += String(format: "%03d", n) } else { out.unicodeScalars.append(ch) }
+        }
+        return out
+    }
+
+    var selectedNote: Note? { notes.first { $0.id == selectedNoteId } }
+
+    // ---- 前後の移動 ----
+
+    var selectedIndex: Int? {
+        guard let id = selectedNoteId else { return nil }
+        return filtered.firstIndex { $0.id == id }
+    }
+
+    func move(by delta: Int) {
+        let list = filtered
+        guard !list.isEmpty else { return }
+        let i = selectedIndex ?? (delta > 0 ? -1 : list.count)
+        let j = min(max(i + delta, 0), list.count - 1)
+        selectedNoteId = list[j].id
+    }
+
+    func pickRandom() {
+        let list = filtered.filter { $0.id != selectedNoteId }
+        if let n = list.randomElement() { selectedNoteId = n.id }
+    }
+
+    // ---- プレビュー ----
+
+    /// 既定の暗い地色 (ノートタイプが夜間モードの色を持たないとき)
+    static let darkBackground = Color(red: 0x1C / 255, green: 0x1C / 255, blue: 0x1E / 255)
+
+    /// カードの地色 (CSS の body { background: … } から読む)。窓の隙間やツールバーの色をそろえるため
+    func cardBackground(for note: Note, dark: Bool) -> Color? {
+        guard let nt = notetypes[note.notetypeId] else { return dark ? Self.darkBackground : nil }
+        let css = nt.css
+        if dark {
+            // 夜間モードの指定があればその色、なければ既定の暗い色
+            let pattern = "\\.(?:night_mode|nightMode)[^{]*\\{[^}]*?background(?:-color)?\\s*:\\s*(#[0-9a-fA-F]{3,8})"
+            if let re = try? NSRegularExpression(pattern: pattern, options: [.dotMatchesLineSeparators]),
+               let m = re.firstMatch(in: css, range: NSRange(location: 0, length: (css as NSString).length)),
+               let c = Color(hex: (css as NSString).substring(with: m.range(at: 1))) { return c }
+            return Self.darkBackground
+        }
+        let pattern = "body\\s*\\{[^}]*?background(?:-color)?\\s*:\\s*(#[0-9a-fA-F]{3,8})"
+        guard let re = try? NSRegularExpression(pattern: pattern, options: [.dotMatchesLineSeparators]),
+              let m = re.firstMatch(in: css, range: NSRange(location: 0, length: (css as NSString).length)) else { return nil }
+        return Color(hex: (css as NSString).substring(with: m.range(at: 1)))
+    }
+
+    /// プレビューの HTML。表面だけ、または裏面 (macOS 版の「カード」表示と同じ)
+    func previewHTML(for note: Note, dark: Bool) -> String {
+        guard let nt = notetypes[note.notetypeId] else { return TemplateRenderer.page(body: "<p>ノートタイプが見つかりません</p>", css: "", textZoom: textZoom, dark: dark, hasNightCSS: false) }
+        let idx = min(templateIndex, max(nt.templates.count - 1, 0))
+        let r = TemplateRenderer.render(note: note, notetype: nt, templateIndex: idx)
+        let body: String
+        if side == "front" { body = r.front } else { body = r.back.isEmpty ? r.front : r.back }
+        return TemplateRenderer.page(body: body, css: nt.css, textZoom: textZoom, dark: dark, hasNightCSS: nt.hasNightCSS)
+    }
+
+    /// 共有用の文章 (表と裏)
+    func shareText(for note: Note) -> String {
+        guard let nt = notetypes[note.notetypeId] else { return note.plain }
+        let r = TemplateRenderer.render(note: note, notetype: nt, templateIndex: templateIndex)
+        let f = Note.stripHTML(r.front.replacingOccurrences(of: "<br>", with: "\n").replacingOccurrences(of: "</li>", with: "\n").replacingOccurrences(of: "</div>", with: "\n").replacingOccurrences(of: "</p>", with: "\n"))
+        let b = Note.stripHTML(r.back.replacingOccurrences(of: "<br>", with: "\n").replacingOccurrences(of: "</li>", with: "\n").replacingOccurrences(of: "</div>", with: "\n").replacingOccurrences(of: "</p>", with: "\n"))
+        return b.isEmpty ? f : f + "\n\n----\n\n" + b
+    }
+}
+
+
+extension Color {
+    init?(hex: String) {
+        var h = hex.trimmingCharacters(in: .whitespaces); h.removeFirst()
+        if h.count == 3 { h = h.map { "\($0)\($0)" }.joined() }
+        guard h.count == 6 || h.count == 8, let v = UInt64(h.prefix(6), radix: 16) else { return nil }
+        self.init(red: Double((v >> 16) & 0xff) / 255, green: Double((v >> 8) & 0xff) / 255, blue: Double(v & 0xff) / 255)
+    }
+    /// 暗い色かどうか (文字色を決めるため)
+    var isDark: Bool {
+        let ui = UIColor(self); var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        ui.getRed(&r, green: &g, blue: &b, alpha: &a)
+        return (0.299 * r + 0.587 * g + 0.114 * b) < 0.5
+    }
+}

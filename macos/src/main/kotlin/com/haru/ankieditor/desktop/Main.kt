@@ -29,6 +29,15 @@ import java.awt.Dimension
  *  2. メディアを配るローカルサーバーを立てる (WebView から画像を読むため)
  *  3. コレクションを開いて画面を出す
  */
+/** ウインドウ上端の帯の高さ。信号機もこの中央に置かれる */
+// 帯の高さ。信号機はこの中央に置かれる。
+// 46pt にすると中心が上端から 23dp となり、Claude アプリと同じ位置になる
+// (直径は macOS が決める 12pt 固定で、高さを変えても変わらない)
+const val TITLEBAR_HEIGHT = 46f
+
+/** ウインドウの角丸 (macOS の標準とほぼ同じ) */
+const val WINDOW_CORNER = 20.0
+
 fun main() {
     // ページの描画は Chromium のオフスクリーン描画で受け取り、Compose がそのまま描く。
     // 別の描画層に頼らないので、重なり順の問題が起きない。
@@ -87,6 +96,10 @@ private fun launchApp() = application {
         },
         state = rememberWindowState(width = 1440.dp, height = 900.dp),
         title = "Anki Editor",
+        // 信号機を 28px にするには自前で描くしかないため、装飾は外す
+        undecorated = true,
+        transparent = true,
+        resizable = true,
     ) {
         var minimumContentWidth by remember { mutableStateOf(900f) }
         var maximumContentWidth by remember { mutableStateOf<Float?>(null) }
@@ -162,10 +175,14 @@ private fun launchApp() = application {
                 // 幅を変えている一瞬、まだ描かれていない部分が見える。
                 // そこが白いと目立つので、カードの地色にそろえておく
                 val backdrop = java.awt.Color(0x2C, 0x2C, 0x2C)
-                window.background = backdrop
                 window.contentPane.background = backdrop
                 window.rootPane.background = backdrop
                 (window.contentPane as? javax.swing.JComponent)?.isOpaque = true
+                // 信号機を少し大きくし、タイトルバーの高さをそろえる。
+                // (ボタン自体は OS が描くので、拡大率で見た目の大きさを調整する)
+                window.rootPane.putClientProperty("apple.awt.windowTitleVisible", false)
+                window.rootPane.putClientProperty("apple.awt.fullscreenable", true)
+                window.rootPane.putClientProperty("apple.awt.windowAppearance", "NSAppearanceNameDarkAqua")
                 window.rootPane.putClientProperty("apple.awt.fullWindowContent", true)
                 window.rootPane.putClientProperty("apple.awt.transparentTitleBar", true)
                 window.rootPane.putClientProperty("apple.awt.windowTitleVisible", false)
@@ -181,8 +198,20 @@ private fun launchApp() = application {
                         current.first,
                         current.second,
                         current.third,
+                        hostWindow = window,
                         onMinimumWindowWidth = { minimumContentWidth = it },
                         onMaximumWindowWidth = { maximumContentWidth = it },
+                        onResizeWindowNow = { delta ->
+                            // 境界のドラッグ中。アニメーションを挟むと指から遅れるので、
+                            // その場でウインドウの幅を変える
+                            widthAnimation?.cancel()
+                            val target = (window.width + delta)
+                                .toInt()
+                                .coerceAtLeast(window.minimumSize.width)
+                            if (target != window.width) {
+                                window.size = Dimension(target, window.height)
+                            }
+                        },
                         onResizeWindowBy = { delta ->
                             if (delta != 0f) {
                                 widthAnimation?.cancel()

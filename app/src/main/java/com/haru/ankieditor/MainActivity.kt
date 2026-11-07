@@ -10,6 +10,8 @@ import android.webkit.WebViewClient
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.AnimatedVisibility
@@ -1581,7 +1583,15 @@ fun AppScreen(
     }
 
     Box(Modifier.fillMaxSize()) {
-    Scaffold { padding ->
+    // スマホ幅でプレビューを開いている間は、時刻などが並ぶ上端の帯も
+    // カードの地色にそろえて、画面をひと続きに見せる
+    val previewFullScreen = !twoPane && selected != null && !editing
+    val shellColor by animateColorAsState(
+        targetValue = if (previewFullScreen) CARD_BACKGROUND else MaterialTheme.colorScheme.background,
+        animationSpec = tween(220),
+        label = "shellColor",
+    )
+    Scaffold(containerColor = shellColor) { padding ->
         if (twoPane) {
             BoxWithConstraints(Modifier.padding(padding).fillMaxSize()) {
                 val total = maxWidth
@@ -1879,9 +1889,11 @@ fun NoteList(
                         maxLines = 3,
                         overflow = TextOverflow.Ellipsis,
                         softWrap = true,
-                        style = MaterialTheme.typography.bodyMedium.copy(
+                        style = MaterialTheme.typography.bodySmall.copy(
                             // word-break: normal 相当。単語の途中で切らずに折り返す
                             lineBreak = LineBreak.Paragraph,
+                            // 和文の字間を詰める (CSS の font-feature-settings: "palt")
+                            fontFeatureSettings = "palt",
                         ),
                         fontWeight = if (note.id == selected?.id) FontWeight.Bold else FontWeight.Normal,
                         modifier = Modifier.fillMaxWidth(),

@@ -7,6 +7,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.*
 import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.*
@@ -23,7 +24,29 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.*
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.rounded.Sync
+import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.ViewSidebar
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.unit.DpSize
+import androidx.compose.ui.window.Window
+import androidx.compose.ui.window.WindowPosition
+import androidx.compose.ui.window.rememberWindowState
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -48,6 +71,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.haru.ankieditor.AnkiNote
 import com.haru.ankieditor.EditorMode
 import com.haru.ankieditor.FullSyncKind
@@ -95,9 +119,13 @@ fun App(
     repo: DesktopRepo,
     prefs: Prefs,
     server: MediaServer,
+    /** 本体ウインドウ。最前面の小窓を追従させるために使う */
+    hostWindow: java.awt.Window? = null,
     onMinimumWindowWidth: (Float) -> Unit = {},
     onMaximumWindowWidth: (Float?) -> Unit = {},
     onResizeWindowBy: suspend (Float) -> Unit = {},
+    /** ドラッグ中に使う、アニメーション無しの即時リサイズ */
+    onResizeWindowNow: (Float) -> Unit = {},
 ) {
     val scope = rememberCoroutineScope()
 
@@ -163,6 +191,7 @@ fun App(
     var previewMinWidth by remember { mutableStateOf(prefs.previewMinWidth.dp) }
     var previewMaxWidth by remember { mutableStateOf(prefs.previewMaxWidth.dp) }
     var previewWidth by remember {
+        // 起動時は設定した既定幅で開く。境界のドラッグはこの設定を書き換えない
         mutableStateOf(prefs.previewWidth.dp.coerceIn(previewMinWidth, previewMaxWidth))
     }
     // 開閉中にウインドウ制約やComposeの再計測が入っても、表示幅はこの値に固定する。
@@ -593,24 +622,35 @@ fun App(
                 }
             }
     ) {
-    Scaffold { padding ->
+    Scaffold(
+        // 装飾を外しているので、角丸と影は自前で用意する
+        modifier = Modifier
+            .padding(10.dp)
+            .shadow(18.dp, RoundedCornerShape(WINDOW_CORNER.dp))
+            .clip(RoundedCornerShape(WINDOW_CORNER.dp)),
+    ) { padding ->
         BoxWithConstraints(Modifier.padding(padding).fillMaxSize()) {
             val total = maxWidth
             val density = LocalDensity.current
 
             // 上端はmacOSのタイトルバー操作専用。JCEFをこの領域へ入れないことで、
             // 信号機横の操作をCompose側の1系統だけに保つ。
-            Row(Modifier.fillMaxSize().padding(top = 36.dp)) {
+            // 帯のすぐ下から中身を始める
+            Row(Modifier.fillMaxSize().padding(top = TITLEBAR_HEIGHT.dp)) {
                 // ---- 左: 検索と一覧 ----
                 // 保存した境界はウインドウの拡縮では動かさない。
                 // 幅を変えるのは、ユーザーが境界を直接ドラッグしたときだけ。
                 val actualListWidth = listWidth.coerceAtLeast(220.dp)
                 // 一覧はしまえる。幅を 0 まで縮めて、そのまま隠す
-                val shownListWidth by animateDpAsState(
-                    targetValue = if (listVisible) actualListWidth else 0.dp,
+                // 開閉だけをアニメーションさせる。
+                // 幅そのものをアニメーションに通すと、ドラッグ中に追従が遅れて
+                // 「一覧が動かず、プレビューだけ縮む」ように見えてしまう
+                val listOpen by animateFloatAsState(
+                    targetValue = if (listVisible) 1f else 0f,
                     animationSpec = tween(240),
-                    label = "listWidth",
+                    label = "listOpen",
                 )
+                val shownListWidth = actualListWidth * listOpen
                 // 外側だけ縮めて切り取る。中身は常に本来の幅で測る
                 // (幅 0 のまま測らせると、中の部品が負の幅を要求して落ちる)
                 Box(
@@ -634,13 +674,7 @@ fun App(
                             selectedTags =
                                 if (tag in selectedTags) selectedTags - tag else selectedTags + tag
                         },
-                        onSettings = { showSettings = true },
-                        onSync = { sync() },
-                        syncing = syncing,
-                        onHideList = {
-                            listVisible = false
-                            prefs.listVisible = false
-                        },
+                        onAddNote = { showAddNote = true },
                     )
                     ResultHeader(
                         count = notes.size,
@@ -668,21 +702,16 @@ fun App(
                 }
 
                 if (listVisible) SplitHandle { delta ->
-                    val moved = actualListWidth + with(density) { delta.toDp() }
-                    // 一覧を広げるぶんは、プレビューが最低幅まで譲る。
-                    // いまのプレビュー幅を基準にすると余地が無く、まったく動かせなくなる
-                    val floor = previewMinWidth + if (editing) EDITOR_MIN_WIDTH_DP.dp + 10.dp else 0.dp
-                    val listMax = (total - floor - 20.dp).coerceAtLeast(220.dp)
-                    listWidth = moved.coerceIn(220.dp, listMax)
-                    prefs.listWidth = listWidth.value
-                    // 一覧を広げた結果はみ出すぶんは、プレビューを縮めて収める
-                    val room = (total - listWidth - 20.dp -
-                        if (editing) EDITOR_MIN_WIDTH_DP.dp + 10.dp else 0.dp)
-                        .coerceAtLeast(previewMinWidth)
-                    if (previewWidth > room) {
-                        previewWidth = room.coerceIn(previewMinWidth, previewMaxWidth)
-                        frozenPreviewWidth = previewWidth
-                        prefs.previewWidth = previewWidth.value
+                    // 一覧の境界。プレビュー幅はユーザーが決めた値なので動かさない。
+                    // 右側に余地が無くなったら、そのぶんウインドウを広げて場所を作る
+                    // (上限で頭打ちにすると「掴んでも動かない」状態になってしまう)
+                    val moved = (actualListWidth + with(density) { delta.toDp() })
+                        .coerceAtLeast(220.dp)
+                    val grow = moved - actualListWidth
+                    if (grow != 0.dp) {
+                        listWidth = moved
+                        prefs.listWidth = listWidth.value
+                        onResizeWindowNow(grow.value)
                     }
                 }
 
@@ -743,7 +772,6 @@ fun App(
                                 .coerceIn(previewMinWidth, previewMaxWidth)
                             previewWidth = moved.coerceIn(previewMinWidth, ceiling)
                             frozenPreviewWidth = previewWidth
-                            prefs.previewWidth = previewWidth.value
                         }
                     }
                     Box(Modifier.width(boundedPreviewWidth).fillMaxHeight()) {
@@ -753,8 +781,9 @@ fun App(
                             html = previewHtml.takeIf { previewNoteId == selected?.id },
                             loading = previewLoading,
                             zoom = prefs.textZoom / 100.0,
-                            onEdit = if (selected != null && !editing) ({ startEditing() }) else null,
-                            onAdd = if (editing) null else ({ showAddNote = true }),
+                            onEdit = null,
+                            // 追加は検索バーの右隣に移した
+                            onAdd = null,
                             onRefresh = if (editing && !livePreview) ({ refreshPreview() }) else null,
                             findable = selected != null,
                             findRequest = previewFindRequest,
@@ -773,17 +802,42 @@ fun App(
         }
     }
 
-        // 信号機横に常駐する唯一のタイトルバー操作。
-        TitlebarControls(
+        // ウインドウ上端の帯。信号機 → 一覧の開閉 → カード名、
+        // 右端に 編集・検索・同期・設定 を固定する
+        val titlebarHint = remember { TitlebarHint() }
+        TitlebarHintWindow(titlebarHint, hostWindow)
+        CompositionLocalProvider(LocalTitlebarHint provides titlebarHint) {
+        WindowTitlebar(
             listVisible = listVisible,
             onToggleList = {
                 listVisible = !listVisible
                 prefs.listVisible = listVisible
             },
-            // 信号機の右に、同じ高さで並べる
-            modifier = Modifier.align(Alignment.TopStart).padding(start = 78.dp, top = 8.dp)
+            // 帯は 1 行なので、改行 (<br>) は効かせず、タグ自体も出さない。
+            // noteTitle が他の HTML タグを落としたうえで <br> を改行にするので、
+            // ここでその改行を取り除いて 1 行に詰める
+            title = selected?.let { note ->
+                // 帯は 1 行。<br> は改行させず半角スペースに置き換え、
+                // 3 つ目の <br> から先は出さない
+                com.haru.ankieditor.noteTitle(note, 80).text
+                    .replace("\r", "")
+                    .split("\n")
+                    .take(3)
+                    .joinToString(" ")
+                    .trim()
+            } ?: "",
+            onEdit = if (selected != null && !editing) ({ startEditing() }) else null,
+            onFind = if (selected != null) ({ previewFindRequest++ }) else null,
+            onSync = { sync() },
+            syncing = syncing,
+            onSettings = { showSettings = true },
+            hostWindow = hostWindow,
+            // 信号機は帯の中央に置かれるので、こちらも同じ高さの中央にそろえる
+            modifier = Modifier.align(Alignment.TopStart).fillMaxWidth()
+                .height(TITLEBAR_HEIGHT.dp)
                 .zIndex(20f),
         )
+        }
 
     }
 
@@ -798,11 +852,14 @@ fun App(
             onOpenLogin = { showSettings = false; showLogin = true },
             onMessage = { message = it },
             onRefreshMeta = { refreshMeta(); search() },
+            onPreviewWidthChanged = { width ->
+                previewWidth = width.dp
+                frozenPreviewWidth = previewWidth
+            },
             onPreviewBoundsChanged = { min, max ->
                 previewMinWidth = min.dp
                 previewMaxWidth = max.dp
                 previewWidth = previewWidth.coerceIn(previewMinWidth, previewMaxWidth)
-                prefs.previewWidth = previewWidth.value
             },
             onDismiss = { showSettings = false },
         )
@@ -884,30 +941,313 @@ fun App(
 
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
-private fun TitlebarControls(
+private fun WindowTitlebar(
     listVisible: Boolean,
     onToggleList: () -> Unit,
+    title: String,
+    onEdit: (() -> Unit)?,
+    onFind: (() -> Unit)?,
+    onSync: () -> Unit,
+    syncing: Boolean,
+    onSettings: () -> Unit,
+    hostWindow: java.awt.Window?,
     modifier: Modifier = Modifier,
 ) {
-    // Claude のデスクトップ版と同じで、タイトルバーに置くのは一覧の開閉だけ。
-    // 元に戻す・やり直すはキー操作 (⌘Z / ⌘⇧Z) に任せる
+    val density = LocalDensity.current
+    Row(
+        modifier
+            // 帯を掴んでウインドウを動かせるようにする。
+            // 掴んだ位置からの絶対値で置き直すので、OS 側も動かしていた場合でも
+            // 二重に動いてしまうことがない
+            .pointerInput(hostWindow) {
+                // ウインドウを動かすと、掴んだ点のウインドウ内座標も一緒に動く。
+                // 差分を足していくと動きが暴れるので、画面上のカーソル位置を基準に
+                // 「掴んだ点との相対位置」を保つように置き直す
+                var grab: java.awt.Point? = null
+                detectDragGestures(
+                    onDragStart = {
+                        val window = hostWindow
+                        val pointer = java.awt.MouseInfo.getPointerInfo()?.location
+                        grab = if (window != null && pointer != null) {
+                            java.awt.Point(pointer.x - window.x, pointer.y - window.y)
+                        } else null
+                    },
+                    onDragEnd = { grab = null },
+                    onDragCancel = { grab = null },
+                ) { _, _ ->
+                    val offset = grab ?: return@detectDragGestures
+                    val pointer = java.awt.MouseInfo.getPointerInfo()?.location
+                        ?: return@detectDragGestures
+                    hostWindow?.setLocation(pointer.x - offset.x, pointer.y - offset.y)
+                }
+            }
+            .padding(end = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        // 自前の信号機 (OS のものは 24px 固定のため)
+        TrafficLights(hostWindow)
+        Spacer(Modifier.width(12.dp))
+        TitlebarButton(
+            Icons.Rounded.ViewSidebar,
+            if (listVisible) "一覧を閉じる" else "一覧を開く",
+            onToggleList,
+        )
+        if (title.isNotEmpty()) {
+            Text(
+                title,
+                // 和文の字間を詰める (CSS の font-feature-settings: "palt" と同じ)
+                style = MaterialTheme.typography.labelLarge.copy(
+                    fontFeatureSettings = "palt",
+                    fontSize = 13.sp,
+                ),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f).padding(start = 8.dp),
+            )
+        } else {
+            Spacer(Modifier.weight(1f))
+        }
+        // 右端は 編集 → 検索 → 同期 → 設定 の順で固定
+        if (onEdit != null) TitlebarButton(Icons.Rounded.Edit, "編集", onEdit)
+        if (onFind != null) TitlebarButton(Icons.Rounded.Search, "カード内を検索", onFind)
+        val spin = rememberInfiniteTransition(label = "sync")
+        val angle by spin.animateFloat(
+            initialValue = 0f,
+            targetValue = 360f,
+            animationSpec = infiniteRepeatable(tween(1100, easing = LinearEasing)),
+            label = "syncAngle",
+        )
+        TitlebarButton(
+            Icons.Rounded.Sync,
+            if (syncing) "同期中" else "同期",
+            onSync,
+            enabled = !syncing,
+            iconSize = 18.dp,
+            iconModifier = Modifier.graphicsLayer { rotationZ = if (syncing) angle else 0f },
+        )
+        TitlebarButton(Icons.Rounded.Settings, "設定", onSettings)
+    }
+}
+
+
+
+
+@OptIn(ExperimentalComposeUiApi::class, ExperimentalMaterial3Api::class)
+@Composable
+private fun TitlebarButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    onClick: () -> Unit,
+    enabled: Boolean = true,
+    iconSize: androidx.compose.ui.unit.Dp = 16.dp,
+    iconModifier: Modifier = Modifier,
+) {
     var hovered by remember { mutableStateOf(false) }
+    val hint = LocalTitlebarHint.current
+    val density = LocalDensity.current
+    var spot by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
+    var width by remember { mutableStateOf(0) }
+    DisposableEffect(Unit) { onDispose { hint?.hide(label) } }
     Surface(
-        onClick = onToggleList,
+        onClick = onClick,
+        enabled = enabled,
         shape = RoundedCornerShape(6.dp),
         color = if (hovered) MaterialTheme.colorScheme.surfaceContainerHigh else Color.Transparent,
         contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = modifier
-            .size(28.dp)
-            .onPointerEvent(PointerEventType.Enter) { hovered = true }
-            .onPointerEvent(PointerEventType.Exit) { hovered = false },
+        modifier = Modifier
+            .size(30.dp)
+            .onGloballyPositioned {
+                spot = it.positionInWindow()
+                width = it.size.width
+            }
+            .onPointerEvent(PointerEventType.Enter) {
+                hovered = true
+                // ウインドウの中に描くと Chromium の裏に隠れるので、
+                // 最前面の小窓へ位置だけ伝える
+                hint?.show(
+                    label,
+                    with(density) { (spot.x + width / 2f).toDp() },
+                    // 帯の下端から少し離して出す (帯そのものは変えない)
+                    TITLEBAR_HEIGHT.dp + 8.dp,
+                )
+            }
+            .onPointerEvent(PointerEventType.Exit) {
+                hovered = false
+                hint?.hide(label)
+            },
     ) {
         Box(contentAlignment = Alignment.Center) {
-            Icon(
-                Icons.Rounded.ViewSidebar,
-                if (listVisible) "一覧を閉じる" else "一覧を開く",
-                Modifier.size(18.dp),
-            )
+            Icon(icon, label, iconModifier.size(iconSize))
+        }
+    }
+}
+
+
+/** ウインドウタブのアイコンに出す名前ふだ。最前面の小窓に描く */
+@Stable
+class TitlebarHint {
+    var label by mutableStateOf<String?>(null)
+        private set
+    var centerX by mutableStateOf(0.dp)
+        private set
+    var top by mutableStateOf(0.dp)
+        private set
+
+    fun show(text: String, x: androidx.compose.ui.unit.Dp, y: androidx.compose.ui.unit.Dp) {
+        label = text
+        centerX = x
+        top = y
+    }
+
+    fun hide(text: String) {
+        if (label == text) label = null
+    }
+}
+
+val LocalTitlebarHint = androidx.compose.runtime.staticCompositionLocalOf<TitlebarHint?> { null }
+
+/**
+ * 名前ふだの小窓。本体ウインドウの上に浮かせる。
+ * Chromium は本物のビューで Compose より前に出るため、別窓にしないと隠れてしまう
+ */
+@Composable
+fun TitlebarHintWindow(hint: TitlebarHint, hostWindow: java.awt.Window?) {
+    val text = hint.label ?: return
+    val host = hostWindow ?: return
+    val density = LocalDensity.current
+    val boxWidth = 280.dp
+    val boxHeight = 34.dp
+    val origin = runCatching { host.locationOnScreen }.getOrNull() ?: java.awt.Point(0, 0)
+    val x = origin.x.dp + hint.centerX - boxWidth / 2
+    val y = origin.y.dp + hint.top
+    val state = rememberWindowState(
+        position = WindowPosition(x, y),
+        size = DpSize(boxWidth, boxHeight),
+    )
+    // 隣のアイコンへ移ったときは、文字だけでなく位置も追いかける
+    LaunchedEffect(x, y) { state.position = WindowPosition(x, y) }
+    Window(
+        onCloseRequest = {},
+        state = state,
+        undecorated = true,
+        transparent = true,
+        resizable = false,
+        alwaysOnTop = true,
+        focusable = false,
+        title = "",
+    ) {
+        // 窓は広めに取り、その中央にふだを浮かせる (窓の余りは透明)
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Surface(
+                shape = RoundedCornerShape(6.dp),
+                color = MaterialTheme.colorScheme.inverseSurface,
+                contentColor = MaterialTheme.colorScheme.inverseOnSurface,
+                shadowElevation = 6.dp,
+            ) {
+                Text(
+                    text,
+                    style = MaterialTheme.typography.labelSmall,
+                    maxLines = 1,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+                )
+            }
+        }
+    }
+}
+
+
+/**
+ * 自前の信号機。macOS の標準ボタンは 12pt 固定で拡大できないため、
+ * ウインドウの装飾を外して同じ見た目を自分で描いている。
+ * 直径 14dp (Retina で 28px)、中心間隔 23dp、左の余白 17dp。
+ */
+@OptIn(ExperimentalComposeUiApi::class)
+@Composable
+private fun TrafficLights(hostWindow: java.awt.Window?) {
+    var focused by remember { mutableStateOf(true) }
+    var hovered by remember { mutableStateOf(false) }
+    DisposableEffect(hostWindow) {
+        val window = hostWindow ?: return@DisposableEffect onDispose { }
+        val listener = object : java.awt.event.WindowAdapter() {
+            override fun windowActivated(e: java.awt.event.WindowEvent?) { focused = true }
+            override fun windowDeactivated(e: java.awt.event.WindowEvent?) { focused = false }
+        }
+        window.addWindowListener(listener)
+        onDispose { window.removeWindowListener(listener) }
+    }
+    Row(
+        Modifier
+            .padding(start = 17.dp)
+            .onPointerEvent(PointerEventType.Enter) { hovered = true }
+            .onPointerEvent(PointerEventType.Exit) { hovered = false },
+        horizontalArrangement = Arrangement.spacedBy(9.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        LightButton(Color(0xFFFF5F57), focused, hovered, "閉じる") {
+            hostWindow?.let {
+                it.dispatchEvent(
+                    java.awt.event.WindowEvent(it, java.awt.event.WindowEvent.WINDOW_CLOSING)
+                )
+            }
+        }
+        LightButton(Color(0xFFFEBC2E), focused, hovered, "しまう") {
+            (hostWindow as? java.awt.Frame)?.state = java.awt.Frame.ICONIFIED
+        }
+        LightButton(Color(0xFF28C840), focused, hovered, "拡大") {
+            val frame = hostWindow as? java.awt.Frame ?: return@LightButton
+            frame.extendedState =
+                if (frame.extendedState == java.awt.Frame.MAXIMIZED_BOTH) {
+                    java.awt.Frame.NORMAL
+                } else java.awt.Frame.MAXIMIZED_BOTH
+        }
+    }
+}
+
+@Composable
+private fun LightButton(
+    color: Color,
+    focused: Boolean,
+    groupHovered: Boolean,
+    glyph: String,
+    onClick: () -> Unit,
+) {
+    Box(
+        Modifier
+            .size(14.dp)
+            .clip(CircleShape)
+            // 非アクティブのときは macOS と同じで色を落とす
+            .background(if (focused || groupHovered) color else Color(0xFF4E4F51))
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (groupHovered) {
+            // 記号は macOS と同じ形を自分で描く (✕ / − / 拡大)
+            val ink = Color(0x99000000)
+            Canvas(Modifier.size(14.dp)) {
+                val w = size.width
+                val stroke = w * 0.115f
+                val cap = androidx.compose.ui.graphics.StrokeCap.Round
+                when (glyph) {
+                    "閉じる" -> {
+                        val m = w * 0.31f
+                        drawLine(ink, Offset(m, m), Offset(w - m, w - m), stroke, cap)
+                        drawLine(ink, Offset(w - m, m), Offset(m, w - m), stroke, cap)
+                    }
+                    "しまう" -> {
+                        val m = w * 0.26f
+                        drawLine(ink, Offset(m, w / 2f), Offset(w - m, w / 2f), stroke, cap)
+                    }
+                    else -> {
+                        // 左下と右上に三角を置いた macOS の拡大記号
+                        val m = w * 0.28f
+                        val path = androidx.compose.ui.graphics.Path().apply {
+                            moveTo(m, w - m); lineTo(m, m * 1.35f); lineTo(w - m * 1.35f, w - m); close()
+                        }
+                        drawPath(path, ink)
+                    }
+                }
+            }
         }
     }
 }

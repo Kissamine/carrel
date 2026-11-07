@@ -1,0 +1,111 @@
+{
+  "name": "carrel",
+  "version": "1.0.0",
+  "description": "Carrel — Anki 互換のカード編集アプリ (macOS)",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build:cm": "esbuild renderer/src/cm.js --bundle --format=esm --outfile=renderer/vendor/cm.bundle.js --log-level=warning",
+    "dist": "npm run build:cm && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac --arm64",
+    "dist:signed": "npm run build:cm && electron-builder --mac --arm64 -c.mac.notarize=true",
+    "dist:dir": "npm run build:cm && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac --arm64 --dir"
+  },
+  "build": {
+    "appId": "com.haru.carrel",
+    "productName": "Carrel",
+    "files": [
+      "main.js",
+      "preload.js",
+      "renderer/**"
+    ],
+    "extraResources": [
+      {
+        "from": "../macos/bridge",
+        "to": "bridge"
+      },
+      {
+        "from": "../macos/.venv",
+        "to": "python"
+      },
+      {
+        "from": "node_modules/mathjax/es5",
+        "to": "mathjax"
+      },
+      {
+        "from": "vendor-web",
+        "to": "vendor-web"
+      },
+      {
+        "from": "build/Assets.car",
+        "to": "Assets.car"
+      }
+    ],
+    "mac": {
+      "category": "public.app-category.education",
+      "icon": "build/icon.icns",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "arm64"
+          ]
+        }
+      ],
+      "hardenedRuntime": true,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "gatekeeperAssess": false,
+      "extendInfo": {
+        "CFBundleIconName": "CarrelMac"
+      },
+      "minimumSystemVersion": "13.0"
+    },
+    "asarUnpack": [
+      "renderer/preview-preload.js"
+    ],
+    "artifactName": "Carrel-${version}-mac-${arch}.${ext}",
+    "dmg": {
+      "title": "Carrel",
+      "contents": [
+        {
+          "x": 140,
+          "y": 180
+        },
+        {
+          "x": 420,
+          "y": 180,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ]
+    }
+  },
+  "devDependencies": {
+    "electron": "^44.0.0",
+    "electron-builder": "^25.1.8"
+  },
+  "dependencies": {
+    "@codemirror/commands": "^6.11.0",
+    "@codemirror/lang-html": "^6.4.12",
+    "@codemirror/search": "^6.7.1",
+    "@codemirror/state": "^6.7.1",
+    "@codemirror/view": "^6.43.9",
+    "codemirror": "^6.0.2",
+    "esbuild": "^0.28.2",
+    "jquery": "^4.0.0",
+    "mathjax": "^3.2.2"
+  },
+  "license": "AGPL-3.0-or-later",
+  "author": "Kissamine",
+  "homepage": "https://github.com/Kissamine/carrel",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Kissamine/carrel.git"
+  }
+}

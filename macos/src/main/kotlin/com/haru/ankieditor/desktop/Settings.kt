@@ -15,6 +15,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.haru.ankieditor.EditorMode
 import com.haru.ankieditor.ImageCorner
@@ -45,6 +46,8 @@ fun SettingsDialog(
     onMessage: (String) -> Unit,
     onRefreshMeta: () -> Unit,
     onPreviewBoundsChanged: (Float, Float) -> Unit = { _, _ -> },
+    /** 既定のプレビュー幅が変わったときに、いまの表示にも反映する */
+    onPreviewWidthChanged: (Float) -> Unit = {},
     onDismiss: () -> Unit,
 ) {
     var defaultDeck by remember { mutableStateOf(prefs.defaultDeck) }
@@ -53,6 +56,7 @@ fun SettingsDialog(
     var imageCorner by remember { mutableStateOf(prefs.imageCorner) }
     var textZoom by remember { mutableStateOf(prefs.textZoom) }
     var previewMin by remember { mutableStateOf(prefs.previewMinWidth.toInt().toString()) }
+    var previewDefault by remember { mutableStateOf(prefs.previewWidth.toInt().toString()) }
     var previewMax by remember { mutableStateOf(prefs.previewMaxWidth.toInt().toString()) }
 
     // 画面全体を薄暗くして、中央にパネルを浮かせる (Claude のデスクトップ版と同じ出し方)
@@ -66,29 +70,49 @@ fun SettingsDialog(
         Surface(
             shape = MacShapes.panel,
             color = MaterialTheme.colorScheme.surfaceContainer,
-            tonalElevation = 3.dp,
-            shadowElevation = 24.dp,
+            tonalElevation = 0.dp,
+            shadowElevation = 30.dp,
+            // macOS のシートは細い縁取りが入る
+            border = androidx.compose.foundation.BorderStroke(
+                1.dp,
+                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),
+            ),
             modifier = Modifier
-                .fillMaxWidth(0.78f)
-                .fillMaxHeight(0.82f)
-                .widthIn(max = 940.dp)
+                .fillMaxWidth(0.74f)
+                .fillMaxHeight(0.80f)
+                .widthIn(max = 860.dp)
                 // パネルの中のタップで閉じないようにする
                 .pointerInput(Unit) { detectTapGestures { } },
         ) {
         Column(Modifier.fillMaxSize()) {
-            Row(
-                Modifier.fillMaxWidth().padding(start = 20.dp, end = 12.dp, top = 14.dp, bottom = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
+            // macOS のシートのタイトルバー。見出しは中央、閉じるは左上
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .height(52.dp)
+                    .padding(horizontal = 12.dp),
             ) {
-                Text("設定", style = MaterialTheme.typography.titleMedium)
-                Spacer(Modifier.weight(1f))
-                IconButton(onClick = onDismiss, modifier = Modifier.size(28.dp)) {
-                    Icon(Icons.Rounded.Close, "閉じる", Modifier.size(16.dp))
+                IconButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.align(Alignment.CenterStart).size(26.dp),
+                ) {
+                    Icon(Icons.Rounded.Close, "閉じる", Modifier.size(15.dp))
                 }
+                Text(
+                    "設定",
+                    style = MaterialTheme.typography.titleSmall.copy(
+                        fontWeight = FontWeight.SemiBold,
+                        fontFeatureSettings = "palt",
+                    ),
+                    modifier = Modifier.align(Alignment.Center),
+                )
             }
-            HorizontalDivider()
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
             SettingsScreen(
                 twoPane = true,
+                // 見出しはこのシート側で出している
+                showTopBar = false,
+                macStyle = true,
                 onBack = onDismiss,
                 summaryOf = { section ->
                     when (section) {
@@ -207,6 +231,30 @@ fun SettingsDialog(
                         }
 
                         SettingsSection.APPEARANCE -> {
+                            SettingsLabel(
+                                "プレビューの既定の幅",
+                                "アプリを開いたときの幅です（dp）。境界をドラッグしても変わりません",
+                            )
+                            OutlinedTextField(
+                                value = previewDefault,
+                                onValueChange = { value ->
+                                    previewDefault = value.filter(Char::isDigit).take(4)
+                                    previewDefault.toFloatOrNull()?.let {
+                                        val fixed = it.coerceIn(
+                                            prefs.previewMinWidth,
+                                            prefs.previewMaxWidth,
+                                        )
+                                        prefs.previewWidth = fixed
+                                        onPreviewWidthChanged(fixed)
+                                    }
+                                },
+                                label = { Text("幅") },
+                                suffix = { Text("dp") },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                            Spacer(Modifier.height(18.dp))
+
                             SettingsLabel(
                                 "プレビューの幅",
                                 "境界ドラッグとウインドウ変更の両方に適用します（dp）",

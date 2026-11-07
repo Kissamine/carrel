@@ -186,7 +186,17 @@ fun NativeWebPane(
         var resizeStartWidth: Int? = null
         // componentResized には「ドラッグ終了」の通知がないため、短い無通信時間を
         // live resize の終了として扱う。ドラッグ中は右側の幅を絶対に取り直さない。
+        fun setResizing(on: Boolean) {
+            val b = browserForLayout ?: return
+            b.executeJavaScript(
+                "document.documentElement.classList." + (if (on) "add" else "remove") +
+                    "('anki-resizing')",
+                b.url,
+                0,
+            )
+        }
         val resizeEndTimer = Timer(180) {
+            setResizing(false)
             resizeRightInset = null
             resizeBottomInset = null
             resizeStartWidth = null
@@ -210,6 +220,7 @@ fun NativeWebPane(
                 // 跳ねる。固定中はネイティブ View に一切サイズを書き込まず、
                 // SwingPanel の通常レイアウトだけに任せる。
                 if (lockWidth.value) {
+                    setResizing(true)
                     resizeEndTimer.stop()
                     resizeRightInset = null
                     resizeBottomInset = null
@@ -219,6 +230,7 @@ fun NativeWebPane(
                     // 何もしないと、直前に自分で書き込んだ幅がそのまま残ってしまう。
                     // Compose が決めた大きさへ必ず戻す
                     applyDesiredSize(handle, container)
+                    resizeEndTimer.restart()
                     return
                 }
 
@@ -238,6 +250,7 @@ fun NativeWebPane(
                 val bottomInset = resizeBottomInset ?: (lastWindowHeight - point.y - container.height)
                     .coerceAtLeast(0)
                     .also { resizeBottomInset = it }
+                if (resizeStartWidth == null) setResizing(true)
                 resizeStartWidth = resizeStartWidth ?: container.width.coerceAtLeast(1)
                 val targetWidth = (content.width - point.x - rightInset).coerceAtLeast(1)
                 val targetHeight = (content.height - point.y - bottomInset).coerceAtLeast(1)

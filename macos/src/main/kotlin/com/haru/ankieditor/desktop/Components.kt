@@ -25,6 +25,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.ArrowDropDown
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
@@ -46,6 +47,7 @@ import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.haru.ankieditor.AnkiNote
 import com.haru.ankieditor.SearchRanker
 import com.haru.ankieditor.SortMode
@@ -65,10 +67,7 @@ fun SearchControls(
     pinned: List<String>,
     selectedTags: Set<String>,
     onToggleTag: (String) -> Unit,
-    onSettings: () -> Unit,
-    onSync: () -> Unit,
-    syncing: Boolean,
-    onHideList: () -> Unit = {},
+    onAddNote: () -> Unit = {},
 ) {
     val syncTransition = rememberInfiniteTransition(label = "searchSyncRotation")
     val syncRotation by syncTransition.animateFloat(
@@ -129,22 +128,15 @@ fun SearchControls(
                     },
                 )
             }
-            Spacer(Modifier.width(2.dp))
-            TooltipIconButton(
-                "同期",
-                Icons.Rounded.Sync,
-                enabled = !syncing,
-                iconModifier = Modifier.graphicsLayer {
-                    rotationZ = if (syncing) syncRotation else 0f
-                },
-                onClick = onSync,
-            )
-            TooltipIconButton("設定", Icons.Rounded.Settings, onClick = onSettings)
-            TooltipIconButton(
-                "一覧をしまう",
-                Icons.AutoMirrored.Rounded.KeyboardArrowLeft,
-                onClick = onHideList,
-            )
+            Spacer(Modifier.width(6.dp))
+            // カードの追加は検索バーの右隣
+            FilledTonalIconButton(
+                onClick = onAddNote,
+                shape = CircleShape,
+                modifier = Modifier.size(34.dp),
+            ) {
+                Icon(Icons.Rounded.Add, "新しいノート", Modifier.size(18.dp))
+            }
         }
 
         LazyRow(
@@ -267,7 +259,11 @@ fun NoteList(
                                 } else title,
                                 maxLines = 3,
                                 overflow = TextOverflow.Ellipsis,
-                                style = MaterialTheme.typography.bodyMedium,
+                                // 和文の字間を詰める (CSS の font-feature-settings: "palt")
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    fontFeatureSettings = "palt",
+                                    fontSize = 13.sp,
+                                ),
                                 fontWeight = if (note.id == selected?.id) FontWeight.Bold else FontWeight.Normal,
                             )
                         },
@@ -317,6 +313,8 @@ fun NoteList(
                         )
                     }
                 }
+                // カードどうしの区切り
+                HorizontalDivider()
             }
         }
     }

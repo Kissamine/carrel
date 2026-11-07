@@ -389,6 +389,9 @@ class AnkiBackendRepo(context: Context) : NoteStore {
         img:not([class]), img[class=""] { display: block; }
         img, table, pre, iframe, video { max-width: 100%; }
         body { overflow-x: hidden; }
+        /* プレビュー全体の余白をほんの少し広げる。
+           ノートタイプ側の padding は残したいので、透明な border で足す */
+        body.card { border: 6px solid transparent; border-left-width: 10px; border-right-width: 10px; }
         </style>
         </head>
         <body class="card">

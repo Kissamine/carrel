@@ -40,6 +40,9 @@ dependencies {
     implementation(compose.materialIconsExtended)
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-swing:1.9.0")
     implementation("org.json:json:20240303")
+    // JetBrains Runtime の拡張 API (タイトルバーの高さを自前で決めるため)。
+    // 実体は同梱の JBR 側にあり、この依存はコンパイル用の入口だけ
+    implementation("com.jetbrains:jbr-api:1.5.0")
     // 埋め込みブラウザは Chromium (JBR に同梱された JCEF) を使う。
     // 実行時は runtime/ の JetBrains Runtime に含まれるモジュールを読み込む
 }

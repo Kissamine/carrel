@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>Carrel</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- ウインドウ上端の帯。信号機の右から始まる -->
+  <header id="titlebar">
+    <button class="icon" id="toggleList" title="一覧を閉じる">
+      <svg viewBox="0 0 24 24"><path d="M4 5h16v14H4z" fill="none" stroke="currentColor" stroke-width="1.8" rx="2"/><path d="M10 5v14" stroke="currentColor" stroke-width="1.8"/></svg>
+    </button>
+    <button class="icon" id="undo" title="取り消す">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></svg>
+    </button>
+    <button class="icon" id="redo" title="やり直す">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M15 14l5-5-5-5"/><path d="M20 9H10a6 6 0 0 0 0 12h3"/></svg>
+    </button>
+    <div id="cardTitle"></div>
+    <div class="spacer"></div>
+    <button class="icon" id="edit" title="編集">
+      <svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16v4z" fill="currentColor"/></svg>
+    </button>
+    <button class="icon" id="find" title="カード内を検索">
+      <svg viewBox="0 0 24 24"><path d="M10 4a6 6 0 1 0 3.5 10.9l4.8 4.8 1.4-1.4-4.8-4.8A6 6 0 0 0 10 4zm0 2a4 4 0 1 1 0 8 4 4 0 0 1 0-8z" fill="currentColor"/></svg>
+    </button>
+    <button class="icon" id="sync" title="同期">
+      <svg viewBox="0 0 24 24"><path d="M12 6V3L8 7l4 4V8a4 4 0 1 1-4 4H6a6 6 0 1 0 6-6z" fill="currentColor"/></svg>
+    </button>
+    <button class="icon" id="settings" title="設定">
+      <svg viewBox="0 0 24 24"><path d="M19.14 12.94a7.07 7.07 0 0 0 0-1.88l2-1.58a.5.5 0 0 0 .12-.61l-1.9-3.29a.5.5 0 0 0-.59-.22l-2.39 1a7 7 0 0 0-1.62-.94l-.36-2.54A.5.5 0 0 0 13.9 2h-3.8a.5.5 0 0 0-.5.42l-.36 2.54a7 7 0 0 0-1.62.94l-2.39-1a.5.5 0 0 0-.59.22l-1.9 3.29a.5.5 0 0 0 .12.61l2 1.58a7.07 7.07 0 0 0 0 1.88l-2 1.58a.5.5 0 0 0-.12.61l1.9 3.29a.5.5 0 0 0 .59.22l2.39-1a7 7 0 0 0 1.62.94l.36 2.54a.5.5 0 0 0 .5.42h3.8a.5.5 0 0 0 .5-.42l.36-2.54a7 7 0 0 0 1.62-.94l2.39 1a.5.5 0 0 0 .59-.22l1.9-3.29a.5.5 0 0 0-.12-.61ZM12 15.5A3.5 3.5 0 1 1 15.5 12 3.5 3.5 0 0 1 12 15.5Z" fill="currentColor"/></svg>
+    </button>
+  </header>
+
+  <main id="shell">
+    <!-- 左: 検索と一覧 -->
+    <section id="list">
+      <div class="logo-row"><svg class="logo" viewBox="4.10 -76.70 274.50 79.60" aria-label="Carrel"><path d="M43.30 1.90C51.90 1.90 59.20 -0.30 65.50 -4.80L65.50 -17.90C58.50 -11.90 50.90 -8.90 42.40 -8.90C28.10 -8.90 17.20 -19.80 17.20 -35.50C17.20 -51.40 27.90 -62.50 43.60 -62.50C51.70 -62.50 59.00 -59.70 65.60 -54.10L66.20 -65.80C59.20 -70.70 51.70 -73.20 43.10 -73.20C32.40 -73.20 23.10 -69.50 16.00 -62.50C8.90 -55.50 5.10 -46.10 5.10 -35.60C5.10 -25.20 8.90 -15.60 15.90 -8.70C22.90 -1.80 32.30 1.90 43.30 1.90ZM96.80 1.90C103.30 1.90 108.30 -0.70 112.10 -6.00L112.10 -0.00L122.70 -0.00L122.70 -46.30L112.10 -46.30L112.10 -38.70C109.60 -44.60 104.10 -47.90 96.50 -47.90C84.30 -47.90 75.70 -38.10 75.70 -23.20C75.70 -7.40 83.90 1.90 96.80 1.90ZM99.50 -7.50C91.50 -7.50 86.80 -13.00 86.80 -22.90C86.80 -32.70 91.70 -38.50 99.70 -38.50C107.60 -38.50 112.40 -33.00 112.40 -23.30C112.40 -13.50 106.80 -7.50 99.50 -7.50ZM137.30 -0.00L147.90 -0.00L147.90 -20.30C147.90 -32.80 150.30 -38.70 157.80 -38.70C160.20 -38.70 162.30 -38.20 164.30 -36.80L168.10 -45.80C165.30 -47.20 162.40 -47.90 159.40 -47.90C153.80 -47.90 150.20 -45.00 147.90 -38.90L147.90 -46.40L137.30 -46.40ZM174.10 -0.00L184.70 -0.00L184.70 -20.30C184.70 -32.80 187.10 -38.70 194.60 -38.70C197.00 -38.70 199.10 -38.20 201.10 -36.80L204.90 -45.80C202.10 -47.20 199.20 -47.90 196.20 -47.90C190.60 -47.90 187.00 -45.00 184.70 -38.90L184.70 -46.40L174.10 -46.40ZM231.80 1.90C242.20 1.90 249.80 -2.60 255.00 -11.90L246.10 -16.90C242.70 -10.50 238.40 -7.80 231.60 -7.80C223.90 -7.80 219.00 -12.90 218.50 -21.60L255.50 -21.60L255.50 -23.60C255.50 -39.00 246.70 -47.90 231.80 -47.90C217.40 -47.90 207.50 -37.40 207.50 -23.00C207.50 -7.90 217.00 1.90 231.80 1.90ZM219.20 -28.70C220.90 -35.60 225.10 -38.90 232.00 -38.90C239.30 -38.90 243.70 -35.40 244.50 -28.70ZM267.00 -0.00L277.60 -0.00L277.60 -75.70L267.00 -75.70Z" fill="currentColor"/></svg></div>
+      <div class="search-row">
+        <div class="search">
+          <svg viewBox="0 0 24 24"><path d="M10 4a6 6 0 1 0 3.5 10.9l4.8 4.8 1.4-1.4-4.8-4.8A6 6 0 0 0 10 4zm0 2a4 4 0 1 1 0 8 4 4 0 0 1 0-8z" fill="currentColor"/></svg>
+          <input id="keyword" placeholder="検索">
+          <button id="clearKeyword" class="clear" hidden title="消す">
+            <svg viewBox="0 0 24 24"><path d="M18.3 5.7 12 12l6.3 6.3-1.4 1.4L10.6 13.4 4.3 19.7 2.9 18.3 9.2 12 2.9 5.7 4.3 4.3l6.3 6.3 6.3-6.3z" fill="currentColor"/></svg>
+          </button>
+        </div>
+        <button class="add" id="addNote" title="新しいノート">＋</button>
+      </div>
+      <div class="tags">
+        <div class="chip deck" id="deckChip" title="デッキで絞り込む">
+          <span id="deckName">すべてのデッキ</span>
+          <svg viewBox="0 0 24 24" class="chev"><path d="M7 10l5 5 5-5z" fill="currentColor"/></svg>
+          <select id="deckSelect"></select>
+        </div>
+        <div id="tags" class="tagchips"></div>
+      </div>
+      <div class="result-head">
+        <span id="count">0 件</span>
+        <select id="sortMode">
+          <option value="NAME_ASC">名前（昇順）</option>
+          <option value="NAME_DESC">名前（降順）</option>
+          <option value="MTIME_DESC">更新が新しい順</option>
+          <option value="MTIME_ASC">更新が古い順</option>
+          <option value="RELEVANCE">関連順</option>
+        </select>
+      </div>
+      <div id="notes"></div>
+      <div id="emptyList" hidden>
+        <p class="why"></p>
+        <button class="pill ghost" id="clearFilters">絞り込みを解除</button>
+      </div>
+    </section>
+
+    <div class="split" id="split"></div>
+
+    <!-- 中: 編集 -->
+    <section id="editorPane" hidden>
+      <div class="editor-bar top">
+        <div class="mode">
+          <button id="modeRich" class="on">テキスト</button><button id="modeHtml">HTML</button>
+        </div>
+        <span class="grow"></span>
+        <button class="pill ghost" id="refreshPreview" hidden>プレビューを更新</button>
+        <button class="pill" id="save">保存</button>
+        <button class="pill ghost" id="closeEditor">閉じる</button>
+      </div>
+      <div class="editor-bar format" id="formatBar">
+        <button data-cmd="bold" title="太字"><b>B</b></button>
+        <button data-cmd="italic" title="斜体"><i>I</i></button>
+        <button data-cmd="underline" title="下線"><u>U</u></button>
+        <button data-cmd="superscript" title="上付き">x²</button>
+        <button data-cmd="subscript" title="下付き">x₂</button>
+        <button data-cmd="insertUnorderedList" title="箇条書き">•</button>
+        <button data-cmd="removeFormat" title="書式を消す">消</button>
+        <span class="grow"></span>
+        <button id="insertMedia" title="画像・音声を入れる">＋ メディア</button>
+      </div>
+      <div class="editor-bar">
+        <div class="editor-find">
+          <svg viewBox="0 0 24 24"><path d="M10 4a6 6 0 1 0 3.5 10.9l4.8 4.8 1.4-1.4-4.8-4.8A6 6 0 0 0 10 4zm0 2a4 4 0 1 1 0 8 4 4 0 0 1 0-8z" fill="currentColor"/></svg>
+          <input id="editorFindInput" placeholder="ノート内検索">
+          <span id="editorFindCount"></span>
+          <button id="editorFindPrev">‹</button>
+          <button id="editorFindNext">›</button>
+          <button id="replaceOpen" class="find-replace" title="検索して置換">置換</button>
+          <button id="aiOpen" class="find-replace" title="AI に直してもらう">AI</button>
+        </div>
+        <div class="replace-pop ai-pop" id="aiPop" hidden>
+          <div class="ai-head">
+            <span class="ai-chip">AI</span>
+            <select id="aiModel" title="使う AI を切り替える"></select>
+            <span class="grow"></span>
+            <div class="ai-seg" id="aiScopeSeg">
+              <button data-scope="selection">選択範囲</button>
+              <button data-scope="field" class="on">この欄</button>
+              <button data-scope="all">全体</button>
+            </div>
+          </div>
+          <div class="ai-log" id="aiLog" hidden></div>
+          <div class="ai-sub">
+            <div class="ai-target" id="aiTarget"></div>
+            <span class="grow"></span>
+            <span class="ai-sub-label">考える深さ</span>
+            <div class="ai-seg" id="aiEffortSeg">
+              <button data-effort="fast">高速</button>
+              <button data-effort="low">低</button>
+              <button data-effort="medium" class="on">中</button>
+              <button data-effort="high">高</button>
+            </div>
+          </div>
+          <div class="ai-prompt-wrap">
+            <div id="aiPrompt" contenteditable="true" spellcheck="false" data-placeholder="例：文体をですます調にして／@ でカードを参照／/ でスニペットをひな形に／URL はそのまま資料に"></div>
+            <div class="ai-mention" id="aiMention" hidden></div>
+          </div>
+          <div class="ai-attach-list" id="aiAttachList" hidden></div>
+          <!-- 提案の確認 (この窓の中で完結させる) -->
+          <div id="aiReview" hidden></div>
+          <div class="replace-row act ai-foot">
+            <button id="aiPlus" title="画像や PDF を添付 (ドラッグ＆ドロップや ⌘V でも)">＋</button>
+            <button class="ai-toggle" id="aiRememberAsk" title="実行したとき、この指示を記憶にも加える">この指示を記憶</button>
+            <span id="aiHint"></span>
+            <span class="grow"></span>
+            <button class="ai-memory" id="aiMemoryChip" title="他のカードから学んだ書き方の記憶。クリックで確認・編集">記憶</button>
+            <button id="aiCancel">閉じる</button>
+            <button id="aiRun" class="primary">実行 <kbd>⌘↩</kbd></button>
+          </div>
+        </div>
+        <div class="replace-pop" id="replacePop" hidden>
+          <div class="replace-head">
+            <span class="ai-chip">置換</span>
+            <span class="grow"></span>
+            <div class="ai-seg" id="replaceScopeSeg">
+              <button data-scope="note" class="on">このノート</button>
+              <button data-scope="all">すべてのノート</button>
+            </div>
+          </div>
+          <div class="replace-row">
+            <label>検索</label>
+            <input id="replaceFrom" placeholder="探す語 (タブ文字は \t)">
+            <span class="replace-count" id="replaceCount"></span>
+          </div>
+          <div class="replace-row">
+            <label>置換</label>
+            <input id="replaceTo" placeholder="置き換える語">
+            <span class="replace-count"></span>
+          </div>
+          <div class="replace-opts">
+            <label><input type="checkbox" id="replaceCase" checked> 大文字・小文字を区別</label>
+            <span class="grow"></span>
+          </div>
+          <div class="replace-row act">
+            <span id="replaceHint"></span>
+            <button id="replaceOne">1 件置換</button>
+            <button id="replaceAll" class="primary">すべて置換</button>
+          </div>
+        </div>
+      </div>
+      <div class="review-bar" id="reviewBar" hidden>
+        <span class="ai-chip">AI</span>
+        <span class="review-text">提案を本文に入れました — <mark class="diff-add">追加</mark> <mark class="diff-del">削除</mark>。プレビューも提案の内容です</span>
+        <span class="grow"></span>
+        <button id="reviewRemember" title="この編集の仕方を記憶に加える (今後の指示で同じように直す)">記憶に追加</button>
+        <button id="reviewRedo" title="修正の指示を出して作り直す (前の提案は破棄)">修正して作り直す</button>
+        <button id="reviewDiscard">破棄</button>
+        <button id="reviewApply" class="primary">適用</button>
+      </div>
+      <div class="snippet-bar" id="snippetBar" hidden></div>
+      <div id="fields"></div>
+      <div class="tagline">
+        <span class="tagtitle">タグ</span>
+        <span id="editorTags"></span>
+        <button id="addTag" class="tag-add" title="タグを付ける">＋</button>
+      </div>
+      <div id="tagPicker" hidden>
+        <input id="tagPickerInput" placeholder="タグを探す・作る">
+        <div id="tagPickerList"></div>
+      </div>
+    </section>
+
+    <div class="split" id="split2" hidden></div>
+
+    <!-- 右: プレビュー -->
+    <section id="previewPane">
+      <!-- カードのページ。画面と同じ出どころ (app://ui/) で配るので、
+           あとから中身だけを差し替えられる -->
+      <!-- プレビューの実体は、最初のカードを開くときに作る (起動を待たせないため) -->
+      <div id="previewLoading" hidden><div class="spinner"></div></div>
+      <div id="empty">
+        <div id="welcome">
+          <p id="emptyText">ノートを選ぶとここに実際のカードが表示されます</p>
+          <div id="loginCall" hidden>
+            <h2>AnkiWeb にログイン</h2>
+            <p>ログインすると、カードと画像をこの Mac と AnkiWeb の間で同期できます。</p>
+            <button class="pill" id="loginCallButton">ログイン</button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- 状態の知らせ (同期など) -->
+  <div id="toast" hidden></div>
+
+  <!-- ノートの追加 -->
+  <dialog id="addDialog">
+    <h2>新しいノート</h2>
+    <label>デッキ<select id="addDeck"></select></label>
+    <label>ノートタイプ<select id="addModel"></select></label>
+    <label>タグ<input id="addTags" placeholder="空白区切り"></label>
+    <div class="dialog-actions">
+      <button class="pill ghost" id="addCancel">やめる</button>
+      <button class="pill" id="addOk">追加</button>
+    </div>
+  </dialog>
+
+  <!-- 削除の確認 -->
+  <dialog id="deleteDialog">
+    <h2>このノートを削除しますか</h2>
+    <p id="deleteTitle"></p>
+    <div class="dialog-actions">
+      <button class="pill ghost" id="deleteCancel">やめる</button>
+      <button class="pill danger" id="deleteOk">削除</button>
+    </div>
+  </dialog>
+
+  <!-- 同期の食い違い -->
+  <dialog id="fullSyncDialog">
+    <h2>コレクション全体の同期が必要です</h2>
+    <p id="fullSyncWhy"></p>
+    <p style="margin-top:8px">どちらの内容を残すか選んでください。選ばなかった側は破棄されます。</p>
+    <table id="fullSyncTable">
+      <tr><th></th><th>更新した時刻</th><th>変更元</th></tr>
+      <tr><td>この端末</td><td id="localTime">—</td><td>Carrel（この Mac）</td></tr>
+      <tr><td>AnkiWeb</td><td id="remoteTime">—</td><td>ほかの Anki アプリ</td></tr>
+    </table>
+    <div id="localEdits" class="local-edits"></div>
+    <div class="dialog-actions">
+      <button class="pill ghost" id="fullSyncCancel">あとで</button>
+      <button class="pill ghost" id="fullSyncDownload">AnkiWeb を残す</button>
+      <button class="pill" id="fullSyncUpload">この端末を残す</button>
+    </div>
+  </dialog>
+
+  <!-- 同じカードを両側で編集していたとき -->
+  <dialog id="conflictDialog">
+    <h2>同じカードが両方で変更されています</h2>
+    <p>どちらの内容を残すか選んでください。選んだ方が、この端末と AnkiWeb の両方に反映されます。</p>
+    <div id="conflictList" class="conflict-list"></div>
+    <div class="dialog-actions">
+      <button class="pill ghost" id="conflictCancel">あとで決める</button>
+      <button class="pill" id="conflictApply">選んだ内容を反映</button>
+    </div>
+  </dialog>
+
+  <!-- 同期していないまま閉じようとしたとき -->
+  <dialog id="quitDialog">
+    <h2>同期していない変更があります</h2>
+    <p id="quitDetail"></p>
+    <div class="dialog-actions">
+      <button class="pill ghost" id="quitCancel">やめる</button>
+      <button class="pill ghost" id="quitAnyway">同期せずに終了</button>
+      <button class="pill" id="quitSync">同期して終了</button>
+    </div>
+  </dialog>
+
+  <!-- 設定 (macOS のシート風) -->
+  <dialog id="settingsDialog">
+    <header class="sheet-bar">
+      <div class="search sheet-search">
+        <svg viewBox="0 0 24 24"><path d="M10 4a6 6 0 1 0 3.5 10.9l4.8 4.8 1.4-1.4-4.8-4.8A6 6 0 0 0 10 4zm0 2a4 4 0 1 1 0 8 4 4 0 0 1 0-8z" fill="currentColor"/></svg>
+        <input id="settingsSearch" placeholder="設定を検索">
+      </div>
+      <button class="icon" id="settingsClose">✕</button>
+    </header>
+    <div class="sheet-body">
+      <nav id="settingsNav"></nav>
+      <div id="settingsDetail"></div>
+    </div>
+  </dialog>
+
+  <script type="module" src="app.js"></script>
+<!-- 画像の拡大表示 -->
+<div class="lightbox" id="lightbox" hidden>
+  <img id="lightboxImg" alt="">
+</div>
+</body>
+</html>

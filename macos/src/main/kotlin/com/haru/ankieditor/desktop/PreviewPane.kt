@@ -76,9 +76,10 @@ fun PreviewPane(
             it.replace(
                 "</body>",
                 CardHtml.overlay(
-                    canEdit = true,
-                    canAdd = true,
-                    canFind = true,
+                    // 編集と検索はタイトルバー側に置いた
+                    canEdit = false,
+                    canAdd = false,
+                    canFind = false,
                     canRefresh = true,
                 ) + "</body>",
             )
@@ -88,9 +89,9 @@ fun PreviewPane(
         onEdit != null, onAdd != null, findable, onRefresh != null,
     ) {
         mapOf(
-            "ankiEdit" to (onEdit != null),
-            "ankiAdd" to (onAdd != null),
-            "ankiFindOpen" to findable,
+            "ankiEdit" to false,
+            "ankiAdd" to false,
+            "ankiFindOpen" to false,
             "ankiRefresh" to (onRefresh != null),
         ).entries.joinToString(";") { (id, shown) ->
             "(function(e){if(e)e.style.display='${if (shown) "flex" else "none"}'})(document.getElementById('$id'))"

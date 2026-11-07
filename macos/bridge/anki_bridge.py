@@ -158,15 +158,27 @@ class Bridge:
             "mtimeSecs": note.mod,
         }
 
-    def searchNotes(self, query: str, limit: int = 200) -> list[dict]:
+    def searchNotes(self, query: str, limit: int = 200, brief: int = 0) -> list[dict]:
+        """
+        一覧に出すためのノート一覧。
+
+        brief を立てると各フィールドを先頭だけに切り詰めて返す。
+        一覧では見出しとタグしか使わないので、長い本文まで送ると
+        受け取り側の解析だけで数秒かかってしまう。
+        """
         col = self._col()
         ids = col.find_notes(query or "deck:*")
         out = []
         for nid in ids[:limit]:
             try:
-                out.append(self._note_json(col.get_note(nid)))
+                note = col.get_note(nid)
             except Exception:
                 continue
+            data = self._note_json(note)
+            if brief:
+                data["fields"] = [f[:400] for f in data["fields"]]
+                data["brief"] = True
+            out.append(data)
         return out
 
     def allTags(self) -> list[str]:
@@ -246,6 +258,25 @@ class Bridge:
         note.tags = tags.split()
         col.update_note(note)
 
+    def replaceInNotes(
+        self, query: str, find: str, repl: str, regex: int = 0, matchCase: int = 1
+    ) -> dict:
+        """すべてのノート (または絞り込んだノート) の中身をまとめて置き換える"""
+        col = self._col()
+        ids = col.find_notes(query or "")
+        if not ids:
+            return {"notes": 0, "hits": 0}
+        changed = col.find_and_replace(
+            note_ids=list(ids),
+            search=find,
+            replacement=repl,
+            regex=bool(regex),
+            field_name=None,
+            match_case=bool(matchCase),
+        )
+        count = getattr(changed, "count", 0)
+        return {"notes": int(count), "hits": int(count), "scanned": len(ids)}
+
     def addingDefaults(self) -> dict:
         d = self._col().defaults_for_adding(current_review_card=None)
         return {"deckId": d.deck_id, "notetypeId": d.notetype_id}
@@ -271,10 +302,14 @@ class Bridge:
     # -------------------------------------------------------- ノートタイプ編集
 
     def notetypes(self) -> list[dict]:
-        return [
-            {"id": nt.id, "name": nt.name}
-            for nt in self._col().models.all_names_and_ids()
-        ]
+        col = self._col()
+        out = []
+        for nt in col.models.all_names_and_ids():
+            count = col.db.scalar("select count() from notes where mid = ?", nt.id) or 0
+            out.append({"id": nt.id, "name": nt.name, "notes": count})
+        # よく使うものを先に
+        out.sort(key=lambda x: -x["notes"])
+        return out
 
     def templateOf(self, notetypeId: int) -> dict | None:
         nt = self._col().models.get(notetypeId)
@@ -312,6 +347,77 @@ class Bridge:
             size = os.path.getsize(path) if os.path.isfile(path) else 0
             out.append({"name": name, "sizeBytes": size})
         return out
+
+    def mediaReport(self) -> dict:
+        """メディア全体の様子: 未使用 (大きさ付き)・見つからないもの・総数"""
+        import os
+
+        col = self._col()
+        report = col.media.check()
+        folder = col.media.dir()
+        unused = []
+        for name in report.unused:
+            path = os.path.join(folder, name)
+            size = os.path.getsize(path) if os.path.isfile(path) else 0
+            unused.append({"name": name, "sizeBytes": size})
+        total = 0
+        total_bytes = 0
+        for entry in os.scandir(folder):
+            if entry.is_file() and not entry.name.startswith("."):
+                total += 1
+                total_bytes += entry.stat().st_size
+        return {
+            "unused": unused,
+            "missing": list(report.missing),
+            "total": total,
+            "totalBytes": total_bytes,
+        }
+
+    # ------------------------------------------------------ 控えからの復元
+
+    def backupNotes(self, path: str, query: str = "", limit: int = 200) -> list[dict]:
+        """控えのファイルを開いて、中のノートを一覧で返す (読むだけ)"""
+        from anki.collection import Collection
+
+        other = Collection(path)
+        try:
+            ids = other.find_notes(query or "deck:*")
+            out = []
+            for nid in ids[:limit]:
+                try:
+                    note = other.get_note(nid)
+                except Exception:
+                    continue
+                out.append({
+                    "id": nid,
+                    "fields": [f[:400] for f in note.fields],
+                    "sizes": [len(f) for f in note.fields],
+                    "tags": " ".join(note.tags),
+                    "mtimeSecs": note.mod,
+                })
+            return out
+        finally:
+            other.close()
+
+    def restoreNote(self, path: str, id: int) -> dict:
+        """控えの中のそのノートを、いまのコレクションへ書き戻す"""
+        from anki.collection import Collection
+
+        other = Collection(path)
+        try:
+            source = other.get_note(id)
+            fields = list(source.fields)
+            tags = list(source.tags)
+        finally:
+            other.close()
+
+        col = self._col()
+        note = col.get_note(id)
+        before = [len(f) for f in note.fields]
+        note.fields = fields
+        note.tags = tags
+        col.update_note(note)
+        return {"before": before, "after": [len(f) for f in fields]}
 
     def deleteMedia(self, names: list) -> None:
         if names:
