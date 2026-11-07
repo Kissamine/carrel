@@ -36,7 +36,9 @@
                 "solid": "display-p3:1.00000,1.00000,1.00000,1.00000"
               }
             }
-          ]
+          ],
+          "glass": false,
+          "specular": false
         }
       ],
       "shadow": {
@@ -46,7 +48,8 @@
       "translucency": {
         "enabled": false,
         "value": 0
-      }
+      },
+      "lighting": "individual"
     },
     {
       "layers": [
