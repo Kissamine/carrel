@@ -462,11 +462,18 @@ struct StudySetupView: View {
 // MARK: - 使い方ガイド
 
 struct GuideView: View {
+    @EnvironmentObject var store: Store
     @Environment(\.dismiss) var dismiss
 
     var body: some View {
         NavigationStack {
             List {
+                Section {
+                    Button {
+                        dismiss()
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { store.showTutorial = true }
+                    } label: { Label("チュートリアルをもう一度見る", systemImage: "play.circle") }
+                }
                 Section("Carrel でできること") {
                     guide("カードを見る", "一覧からカードを選ぶと右 (または次の画面) に表示されます。右上の「表 / 裏」で面を切り替え、下の矢印で前後のカードへ移れます。")
                     guide("カードを作る・直す", "一覧右上のメニューの「新しいカード」で作れます。表示中のカードは右上メニューの「編集」で本文とタグを、「カード情報」でデッキとタグを変えられます。")
@@ -502,6 +509,74 @@ struct GuideView: View {
             Text(body).font(.footnote).foregroundStyle(.secondary)
         }
         .padding(.vertical, 2)
+    }
+}
+
+// MARK: - チュートリアル (初回に自動で表示)
+
+struct TutorialView: View {
+    @EnvironmentObject var store: Store
+    @Environment(\.dismiss) var dismiss
+    @State private var page = 0
+
+    private struct Page { let icon: String; let title: String; let body: String; let color: Color }
+    private let pages: [Page] = [
+        Page(icon: "rectangle.on.rectangle", title: "Carrel へようこそ",
+             body: "暗記カードを、見て・学んで・作れるアプリです。英単語、資格試験、医学など、覚えたいことは何でも。まずはサンプルのカードが 3 枚入っています。", color: .carrelBlue),
+        Page(icon: "list.bullet.rectangle", title: "カードを見る",
+             body: "一覧からカードを選ぶと内容が表示されます。右上の「表 / 裏」で面を切り替え、ロゴの下のタグや検索で絞り込めます。", color: .teal),
+        Page(icon: "graduationcap", title: "学習する",
+             body: "下の帽子ボタンで学習を始めます。答えを見てから × △ ○ ◎ で評価すると、忘れそうな頃に同じカードがまた出てきます (間隔反復)。", color: .green),
+        Page(icon: "square.and.pencil", title: "作る・直す",
+             body: "メニューの「新しいカード」で作成、カード表示中の鉛筆で編集。本文は文章としてもそのまま HTML としても書けます。", color: .orange),
+        Page(icon: "arrow.triangle.2.circlepath.icloud", title: "ほかの端末と同期 (任意)",
+             body: "設定の「外部ファイルの同期」で iCloud Drive のフォルダを選ぶと、macOS 版 Carrel や Anki 形式のファイルとカードを共有できます。使わなくても、この端末だけで完結します。", color: .purple),
+    ]
+
+    var body: some View {
+        VStack(spacing: 0) {
+            TabView(selection: $page) {
+                ForEach(Array(pages.enumerated()), id: \.offset) { i, p in
+                    VStack(spacing: 22) {
+                        Spacer()
+                        Image(systemName: p.icon)
+                            .font(.system(size: 64, weight: .light))
+                            .foregroundStyle(p.color)
+                            .frame(width: 140, height: 140)
+                            .background(p.color.opacity(0.12), in: Circle())
+                        Text(p.title).font(.title2.weight(.bold))
+                        Text(p.body).font(.body).foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center).lineSpacing(4)
+                            .padding(.horizontal, 32)
+                        Spacer()
+                        Spacer()
+                    }
+                    .tag(i)
+                }
+            }
+            .tabViewStyle(.page(indexDisplayMode: .always))
+            .indexViewStyle(.page(backgroundDisplayMode: .always))
+
+            HStack {
+                if page < pages.count - 1 {
+                    Button("スキップ") { dismiss() }.foregroundStyle(.secondary)
+                    Spacer()
+                    Button { withAnimation { page += 1 } } label: {
+                        Text("次へ").font(.headline).frame(minWidth: 120).padding(.vertical, 6)
+                    }
+                    .buttonStyle(.glassProminent).tint(Color.carrelBlueDeep)
+                } else {
+                    Spacer()
+                    Button { dismiss() } label: {
+                        Text("はじめる").font(.headline).frame(minWidth: 160).padding(.vertical, 6)
+                    }
+                    .buttonStyle(.glassProminent).tint(Color.carrelBlueDeep)
+                    Spacer()
+                }
+            }
+            .padding(.horizontal, 24).padding(.bottom, 24)
+        }
+        .interactiveDismissDisabled(false)
     }
 }
 

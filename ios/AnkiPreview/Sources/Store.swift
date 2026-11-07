@@ -162,7 +162,18 @@ final class Store: ObservableObject {
 
     var hasCollection: Bool { FileManager.default.fileExists(atPath: Self.collectionPath.path) }
 
-    init() { Task { await load() } }
+    init() {
+        // 初回 (まだ何もない) はサンプルのカードを用意する。同期フォルダを選べば置き換わる
+        if !hasCollection, let sample = Bundle.main.url(forResource: "sample", withExtension: "anki2") {
+            try? FileManager.default.copyItem(at: sample, to: Self.collectionPath)
+            UserDefaults.standard.set(true, forKey: "sampleLoaded")
+        }
+        Task { await load() }
+    }
+
+    /// チュートリアル (初回は自動で出す。使い方ガイドからいつでも)
+    @Published var showTutorial = !UserDefaults.standard.bool(forKey: "tutorialShown")
+    func tutorialDone() { UserDefaults.standard.set(true, forKey: "tutorialShown"); showTutorial = false }
 
     /// 前回取り込んだフォルダ (ブックマーク)。選び直さずに更新できるように覚えておく
     var lastImportURL: URL? {
