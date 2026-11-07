@@ -32,3 +32,4 @@ ios/AnkiPreview/build-device/
 *.xcuserstate
 xcuserdata/
 macos/hs_err_pid*.log
+ios/AnkiPreview/build-sim/
