@@ -461,7 +461,7 @@ app.whenReady().then(async () => {
     if (collectionOpen) { try { await bridge.call('close', {}); } catch {} collectionOpen = false; }
     return currentProfile();
   });
-  // iCloud Drive へ書き出す (iPhone 版 Carrel が読む)。保存のたびに変わった分だけ
+  // iCloud Drive へ書き出す (iOS 版 Carrel が読む)。保存のたびに変わった分だけ
   const mirrorDir = () => {
     const s = readSettings();
     if (s.icloudMirrorDir) return s.icloudMirrorDir;

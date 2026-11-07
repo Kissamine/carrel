@@ -1481,3 +1481,7 @@ dialog input[type="radio"],
   box-shadow: 0 8px 28px rgba(0,0,0,.35); border: 1px solid var(--outline);
 }
 #ankiBanner[hidden] { display: none; }
+
+/* 設定: 同期の模式図 */
+.sync-figure { margin: 6px 0 2px; color: var(--fg, currentColor); }
+.sync-figure svg { display: block; max-width: 640px; }

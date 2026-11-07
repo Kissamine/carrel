@@ -22,10 +22,10 @@ const SECTIONS = [
     keywords: 'テンプレート 表面 裏面 CSS スタイル ノートタイプ カード' },
   { id: 'trash', title: '削除したカード',
     keywords: '削除 ごみ箱 復元 戻す アーカイブ' },
-  { id: 'backup', title: 'バックアップ',
-    keywords: 'バックアップ 控え 保存先 自動 間隔 手動 iCloud Dropbox 置き換え' },
+  { id: 'backup', title: 'バックアップと同期',
+    keywords: 'バックアップ 控え 保存先 自動 間隔 手動 iCloud Dropbox 置き換え 同期 iPhone 書き出し 取り込み' },
   { id: 'anki', title: 'Anki 連携',
-    keywords: 'Anki プロフィール コレクション 同期 iCloud iPhone 場所 本体 書き出し 取り込み' },
+    keywords: 'Anki プロフィール コレクション 場所 本体' },
   { id: 'media', title: 'メディア整理',
     keywords: 'メディア 画像 音声 動画 未使用 削除 整理' },
   { id: 'appearance', title: '表示',
@@ -154,9 +154,63 @@ async function ankiPane(detail, ctx) {
   open.onclick = () => { ctx.sync(); };
   box.append(sel, where, state, open);
 
-  // iPhone 版のための iCloud Drive への書き出し
+}
+
+/** iCloud ⇄ macOS 版 Carrel ⇄ Anki のコレクション の模式図 */
+function syncFigure() {
+  const wrap = document.createElement('div');
+  wrap.className = 'sync-figure';
+  wrap.innerHTML = [
+    '<svg viewBox="0 0 640 170" width="100%" xmlns="http://www.w3.org/2000/svg" fill="currentColor" font-family="-apple-system, Hiragino Sans, sans-serif" font-size="12">',
+    '  <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="currentColor"/></marker></defs>',
+    // iPhone / iCloud
+    '  <g transform="translate(12,30)">',
+    '    <rect width="170" height="110" rx="14" fill="rgba(90,170,255,0.12)" stroke="rgba(90,170,255,0.6)"/>',
+    '    <text x="85" y="26" text-anchor="middle" font-weight="600">iCloud Drive</text>',
+    '    <text x="85" y="46" text-anchor="middle" opacity="0.7">Carrel/プロフィール名</text>',
+    '    <text x="85" y="78" text-anchor="middle" opacity="0.8">iOS 版 Carrel が</text>',
+    '    <text x="85" y="94" text-anchor="middle" opacity="0.8">読み書きする写し</text>',
+    '  </g>',
+    // Carrel mac
+    '  <g transform="translate(235,30)">',
+    '    <rect width="170" height="110" rx="14" fill="rgba(0,200,200,0.10)" stroke="rgba(0,200,200,0.6)"/>',
+    '    <text x="85" y="26" text-anchor="middle" font-weight="600">macOS 版 Carrel</text>',
+    '    <text x="85" y="62" text-anchor="middle" opacity="0.8">起動時・保存時に</text>',
+    '    <text x="85" y="78" text-anchor="middle" opacity="0.8">両方を見比べて</text>',
+    '    <text x="85" y="94" text-anchor="middle" opacity="0.8">そろえる</text>',
+    '  </g>',
+    // Anki collection
+    '  <g transform="translate(458,30)">',
+    '    <rect width="170" height="110" rx="14" fill="rgba(255,170,60,0.12)" stroke="rgba(255,170,60,0.6)"/>',
+    '    <text x="85" y="26" text-anchor="middle" font-weight="600">Anki のコレクション</text>',
+    '    <text x="85" y="46" text-anchor="middle" opacity="0.7">Application Support/Anki2</text>',
+    '    <text x="85" y="78" text-anchor="middle" opacity="0.8">正本。Anki 本体が</text>',
+    '    <text x="85" y="94" text-anchor="middle" opacity="0.8">AnkiWeb と同期</text>',
+    '  </g>',
+    // arrows
+    '  <g stroke="currentColor" stroke-width="1.6" fill="none" opacity="0.75">',
+    '    <line x1="186" y1="72" x2="231" y2="72" marker-start="url(#ah)" marker-end="url(#ah)"/>',
+    '    <line x1="409" y1="72" x2="454" y2="72" marker-start="url(#ah)" marker-end="url(#ah)"/>',
+    '  </g>',
+    '  <g font-size="10" opacity="0.7" text-anchor="middle">',
+    '    <text x="208" y="60">変更分</text><text x="208" y="96">だけ</text>',
+    '    <text x="431" y="60">直接</text><text x="431" y="96">編集</text>',
+    '  </g>',
+    '  <g font-size="11" opacity="0.75" text-anchor="middle">',
+    '    <text x="97" y="160">iPhone で作る・直す・学ぶ</text>',
+    '    <text x="320" y="160">食い違いは選んで解決</text>',
+    '    <text x="543" y="160">Mac で編集 (⌘S で両方へ)</text>',
+    '  </g>',
+    '</svg>',
+  ].join('\n');
+  return wrap;
+}
+
+/** iOS 版 (iCloud Drive 経由) との同期の設定 */
+async function syncRows(detail, ctx) {
+  // iOS 版のための iCloud Drive への書き出し
   const ms = await window.anki.mirrorStatus();
-  const mbox = row(detail, 'iPhone 版 Carrel 用に iCloud Drive へ書き出す');
+  const mbox = row(detail, 'iOS 版 Carrel 用に iCloud Drive へ書き出す');
   const toggle = document.createElement('label');
   toggle.style.cssText = 'display:flex;align-items:center;gap:8px;cursor:pointer';
   const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = ms.enabled;
@@ -177,7 +231,7 @@ async function ankiPane(detail, ctx) {
   };
   const mhint = document.createElement('div');
   mhint.className = 'hint'; mhint.style.marginTop = '8px';
-  mhint.textContent = 'iPhone 版 Carrel の設定「外部ファイルの同期」で、このフォルダを一度選んでください。以後は iPhone で作った・直した・学習した内容が、Carrel の起動時と保存時に Anki のコレクションへ取り込まれます (両方で直したカードはどちらを残すか選べます)';
+  mhint.textContent = 'iOS 版 Carrel の設定「外部ファイルの同期」で、このフォルダを一度選んでください。以後は iPhone で作った・直した・学習した内容が、Carrel の起動時と保存時に Anki のコレクションへ取り込まれます (両方で直したカードはどちらを残すか選べます)';
   mbox.append(toggle, mwhere, now, mhint);
 
   // 手動同期: どちらを正とするか選んで読み込む
@@ -1255,6 +1309,11 @@ async function trashPane(detail, ctx) {
 
 async function backupPane(detail, ctx) {
   const dir = prefs.getItem('backupDir');
+
+  // ---- データの流れの模式図 ----
+  const figBox = row(detail, 'Carrel のデータは次のように流れます。Anki のコレクションが正本で、iCloud Drive は iPhone との受け渡し用の写しです');
+  figBox.appendChild(syncFigure());
+  await syncRows(detail, ctx);
 
   // ---- 保存先 ----
   const dirBox = row(detail,
