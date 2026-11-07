@@ -51,12 +51,8 @@
     {
       "layers": [
         {
-          "image-name": "Sand.png",
-          "name": "Sand"
-        },
-        {
-          "image-name": "Glow.png",
-          "name": "Glow"
+          "image-name": "Background.png",
+          "name": "Background"
         }
       ],
       "shadow": {
@@ -74,44 +70,5 @@
       "watchOS"
     ],
     "squares": "shared"
-  },
-  "fill-specializations": [
-    {
-      "value": {
-        "linear-gradient": [
-          "display-p3:0.21176,0.79608,0.89412,1.00000",
-          "display-p3:0.05490,0.49804,0.76863,1.00000"
-        ],
-        "orientation": {
-          "start": {
-            "x": -0.5,
-            "y": 0.5
-          },
-          "stop": {
-            "x": 0.5,
-            "y": -0.5
-          }
-        }
-      }
-    },
-    {
-      "appearance": "dark",
-      "value": {
-        "linear-gradient": [
-          "display-p3:0.21176,0.79608,0.89412,1.00000",
-          "display-p3:0.05490,0.49804,0.76863,1.00000"
-        ],
-        "orientation": {
-          "start": {
-            "x": -0.5,
-            "y": 0.5
-          },
-          "stop": {
-            "x": 0.5,
-            "y": -0.5
-          }
-        }
-      }
-    }
-  ]
+  }
 }
