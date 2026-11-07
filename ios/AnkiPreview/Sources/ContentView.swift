@@ -239,7 +239,6 @@ struct TagChips: View {
 
     private func chip(_ tag: String) -> some View {
         HStack(spacing: 3) {
-            Image(systemName: "tag.fill").font(.system(size: 8))
             Text(tag).font(.caption2).lineLimit(1)
             if let onRemove {
                 Button { onRemove(tag) } label: { Image(systemName: "xmark").font(.system(size: 8, weight: .bold)) }
@@ -535,9 +534,9 @@ struct NoteRow: View {
             }
             VStack(alignment: .leading, spacing: 3) {
                 let lines = note.titleLines
-                if let first = lines.first { Text(first).font(.headline).lineLimit(2) }
-                ForEach(Array(lines.dropFirst().enumerated()), id: \.offset) { _, line in
-                    Text(line).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
+                // macOS 版と同じく、見出しの 3 行は同じ大きさ・同じ色で
+                ForEach(Array(lines.enumerated()), id: \.offset) { i, line in
+                    Text(line).font(.headline).lineLimit(i == 0 ? 2 : 1)
                 }
                 if let snip = snippet {
                     Text(snip).font(.caption).foregroundStyle(.secondary).lineLimit(2)
