@@ -23,24 +23,13 @@ struct NoteEditorView: View {
 
     private var notetype: Notetype? { store.notetypes[notetypeId] }
 
-    /// HTML → 文章 (改行タグは改行に、ほかのタグは外す)
-    static func toText(_ html: String) -> String {
-        var t = html
-        for tag in ["<br>", "<br/>", "<br />", "</div>", "</p>", "</li>"] { t = t.replacingOccurrences(of: tag, with: "\n", options: .caseInsensitive) }
-        t = Note.stripHTML(t)
-        while t.hasSuffix("\n") { t.removeLast() }
-        return t
-    }
-    /// 文章 → HTML (記号を逃がして、改行は <br>)
-    static func toHTML(_ text: String) -> String {
-        text.replacingOccurrences(of: "&", with: "&amp;")
-            .replacingOccurrences(of: "<", with: "&lt;")
-            .replacingOccurrences(of: ">", with: "&gt;")
-            .replacingOccurrences(of: "\n", with: "<br>")
-    }
+    /// HTML → 文章 (Markdown の記法に戻す。改行タグは改行に、ほかのタグは外す)
+    static func toText(_ html: String) -> String { Markdown.fromHTML(html) }
+    /// 文章 → HTML (Markdown の基本記法と改行を HTML に)
+    static func toHTML(_ text: String) -> String { Markdown.toHTML(text) }
     /// 書式や画像など、文章にすると失われるものを含むか
     static func hasRichHTML(_ html: String) -> Bool {
-        let simple = html.replacingOccurrences(of: "<br\\s*/?>|</?div>|</?p>|</?li>|</?ul>|</?ol>", with: "", options: [.regularExpression, .caseInsensitive])
+        let simple = html.replacingOccurrences(of: "<br\\s*/?>|</?div>|</?p>|</?li>|</?ul>|</?ol>|</?(b|strong|i|em|s|del|code)>|</?h[1-6][^>]*>|<a [^>]*href=\"[^\"]+\"[^>]*>|</a>", with: "", options: [.regularExpression, .caseInsensitive])
         return simple.contains("<")
     }
 
@@ -67,14 +56,21 @@ struct NoteEditorView: View {
                 if let nt = notetype {
                     ForEach(Array(nt.fieldNames.enumerated()), id: \.offset) { i, name in
                         Section {
-                            TextEditor(text: Binding(get: { i < fields.count ? fields[i] : "" }, set: { if i < fields.count { fields[i] = $0 } }))
-                                .frame(minHeight: i == 0 ? 60 : 90)
-                                .font(mode == "html" ? .system(.footnote, design: .monospaced) : .body)
-                                .autocorrectionDisabled()
-                                .focused($focusedField, equals: i)
+                            let binding = Binding(get: { i < fields.count ? fields[i] : "" }, set: { if i < fields.count { fields[i] = $0 } })
+                            if mode == "html" {
+                                CodeTextView(text: binding, language: .html, minHeight: i == 0 ? 60 : 90)
+                            } else {
+                                TextEditor(text: binding)
+                                    .frame(minHeight: i == 0 ? 60 : 90)
+                                    .font(.body)
+                                    .autocorrectionDisabled()
+                                    .focused($focusedField, equals: i)
+                            }
                         } header: { Text(name) } footer: {
                             if mode == "text", i < original.count, Self.hasRichHTML(original[i]) {
                                 Text("この欄には書式や画像が含まれます。テキストモードで書き換えると書式は失われます (HTML モードならそのまま直せます)")
+                            } else if mode == "text", i == 0 {
+                                Text(verbatim: "Markdown が使えます: **太字** *斜体* `コード` # 見出し - 箇条書き [文字](URL)")
                             }
                         }
                     }
@@ -419,7 +415,7 @@ struct NotetypeEditorView: View {
                         Section("裏面") { codeEditor(t.back) }
                     }
                     Section {
-                        codeEditor(d.css, minHeight: 160)
+                        codeEditor(d.css, minHeight: 160, css: true)
                     } header: { Text("CSS") } footer: {
                         Text("欄は {{欄の名前}}、裏面で表面を出すには {{FrontSide}} と書きます。Anki と同じ書き方です。")
                     }
@@ -447,12 +443,8 @@ struct NotetypeEditorView: View {
         return d.fields.map { $0.originalOrd } != Array(0..<d.fields.count).map { Optional($0) } || d.fields.count != (store.notetypes[notetypeId]?.fieldNames.count ?? 0)
     }
 
-    private func codeEditor(_ text: Binding<String>, minHeight: CGFloat = 110) -> some View {
-        TextEditor(text: text)
-            .font(.system(.footnote, design: .monospaced))
-            .autocorrectionDisabled()
-            .textInputAutocapitalization(.never)
-            .frame(minHeight: minHeight)
+    private func codeEditor(_ text: Binding<String>, minHeight: CGFloat = 110, css: Bool = false) -> some View {
+        CodeTextView(text: text, language: css ? .css : .html, minHeight: minHeight)
     }
 
     private func addField() {
