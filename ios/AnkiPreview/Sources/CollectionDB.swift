@@ -10,7 +10,7 @@ final class CollectionDB {
         // 取り込んだ自前のコピーを開く。Anki は WAL 形式で書き出すので、読み取り専用で開くと
         // 実機では補助ファイル (-shm) を作れず "unable to open database file" になる。
         // 書き込みはしないが、補助ファイルを作れるよう読み書き可で開く (新規作成はしない)
-        if sqlite3_open_v2(path, &db, SQLITE_OPEN_READWRITE | SQLITE_OPEN_NOMUTEX, nil) != SQLITE_OK {
+        if sqlite3_open_v2(path, &db, SQLITE_OPEN_READWRITE | SQLITE_OPEN_NOMUTEX | SQLITE_OPEN_URI, nil) != SQLITE_OK {
             let msg = db.map { String(cString: sqlite3_errmsg($0)) } ?? "open に失敗"
             throw NSError(domain: "AnkiPreview", code: 1, userInfo: [NSLocalizedDescriptionKey: msg])
         }
@@ -237,7 +237,8 @@ final class CollectionDB {
     /// デッキ・ノートタイプ (欄・カードタイプ) ・ノート・カードの行をそのまま写す。id が重なるものは写さない。
     /// ノートタイプの名前がすでにあるときは「(サンプル)」を付けて別物として入れる
     func importSample(from path: String) throws -> Int {
-        try exec("attach database \(Self.quote(path)) as s")
+        // アプリバンドルの中は読み取り専用なので、変更不可 (immutable) として開く (補助ファイルを作ろうとして失敗しないように)
+        try exec("attach database \(Self.quote("file:" + path + "?immutable=1")) as s")
         defer { try? exec("detach database s") }
         let mids = "select mid from s.notes"
         try exec("insert or ignore into decks (id, name, mtime_secs, usn, common, kind) select id, name, mtime_secs, -1, common, kind from s.decks where id != 1 and name not in (select name from decks)")
