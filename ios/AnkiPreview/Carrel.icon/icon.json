@@ -1,20 +1,5 @@
 {
-  "fill": {
-    "linear-gradient": [
-      "display-p3:0.21176,0.79608,0.89412,1.00000",
-      "display-p3:0.05490,0.49804,0.76863,1.00000"
-    ],
-    "orientation": {
-      "start": {
-        "x": -0.5,
-        "y": 0.5
-      },
-      "stop": {
-        "x": 0.5,
-        "y": -0.5
-      }
-    }
-  },
+  "fill": "automatic",
   "groups": [
     {
       "layers": [
@@ -22,18 +7,57 @@
           "image-name": "C.svg",
           "name": "C",
           "fill": {
-            "solid": "display-p3:1.00000,1.00000,1.00000,1.00000"
+            "linear-gradient": [
+              "display-p3:0.21176,0.79608,0.89412,1.00000",
+              "display-p3:0.05490,0.49804,0.76863,1.00000"
+            ],
+            "orientation": {
+              "start": {
+                "x": -0.5,
+                "y": 0.5
+              },
+              "stop": {
+                "x": 0.5,
+                "y": -0.5
+              }
+            }
           },
           "fill-specializations": [
             {
               "value": {
-                "solid": "display-p3:1.00000,1.00000,1.00000,1.00000"
+                "linear-gradient": [
+                  "display-p3:0.21176,0.79608,0.89412,1.00000",
+                  "display-p3:0.05490,0.49804,0.76863,1.00000"
+                ],
+                "orientation": {
+                  "start": {
+                    "x": -0.5,
+                    "y": 0.5
+                  },
+                  "stop": {
+                    "x": 0.5,
+                    "y": -0.5
+                  }
+                }
               }
             },
             {
               "appearance": "dark",
               "value": {
-                "solid": "display-p3:1.00000,1.00000,1.00000,1.00000"
+                "linear-gradient": [
+                  "display-p3:0.21176,0.79608,0.89412,1.00000",
+                  "display-p3:0.05490,0.49804,0.76863,1.00000"
+                ],
+                "orientation": {
+                  "start": {
+                    "x": -0.5,
+                    "y": 0.5
+                  },
+                  "stop": {
+                    "x": 0.5,
+                    "y": -0.5
+                  }
+                }
               }
             }
           ]
@@ -47,26 +71,6 @@
         "enabled": true,
         "value": 0.5
       }
-    },
-    {
-      "layers": [
-        {
-          "image-name": "Sand.png",
-          "name": "Sand"
-        },
-        {
-          "image-name": "Glow.png",
-          "name": "Glow"
-        }
-      ],
-      "shadow": {
-        "kind": "none",
-        "opacity": 0
-      },
-      "translucency": {
-        "enabled": false,
-        "value": 0
-      }
     }
   ],
   "supported-platforms": {
@@ -74,44 +78,5 @@
       "watchOS"
     ],
     "squares": "shared"
-  },
-  "fill-specializations": [
-    {
-      "value": {
-        "linear-gradient": [
-          "display-p3:0.21176,0.79608,0.89412,1.00000",
-          "display-p3:0.05490,0.49804,0.76863,1.00000"
-        ],
-        "orientation": {
-          "start": {
-            "x": -0.5,
-            "y": 0.5
-          },
-          "stop": {
-            "x": 0.5,
-            "y": -0.5
-          }
-        }
-      }
-    },
-    {
-      "appearance": "dark",
-      "value": {
-        "linear-gradient": [
-          "display-p3:0.21176,0.79608,0.89412,1.00000",
-          "display-p3:0.05490,0.49804,0.76863,1.00000"
-        ],
-        "orientation": {
-          "start": {
-            "x": -0.5,
-            "y": 0.5
-          },
-          "stop": {
-            "x": 0.5,
-            "y": -0.5
-          }
-        }
-      }
-    }
-  ]
+  }
 }

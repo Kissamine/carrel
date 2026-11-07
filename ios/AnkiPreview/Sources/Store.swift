@@ -84,6 +84,16 @@ final class Store: ObservableObject {
     @AppStorage("showDueInList") var showDueInList: Bool = true
     /// 見た目: system / light / dark
     @AppStorage("appearance") var appearance: String = "system"
+    /// アプリアイコン: "" = 標準 (テーマ追従) / "CarrelSea" = 水色
+    @AppStorage("appIcon") var appIcon: String = ""
+
+    func applyAppIcon(_ name: String) {
+        let target: String? = name.isEmpty ? nil : name
+        guard UIApplication.shared.supportsAlternateIcons, UIApplication.shared.alternateIconName != target else { return }
+        UIApplication.shared.setAlternateIconName(target) { err in
+            if let err { Task { @MainActor in self.error = "アイコンを変えられません: \(err.localizedDescription)" } }
+        }
+    }
 
     /// 取り込んだコレクションの置き場所 (アプリの中)
     static var dataDir: URL {
@@ -99,17 +109,34 @@ final class Store: ObservableObject {
 
     init() { Task { await load() } }
 
+    /// 前回取り込んだフォルダ (ブックマーク)。選び直さずに更新できるように覚えておく
+    var lastImportURL: URL? {
+        guard let data = UserDefaults.standard.data(forKey: "importBookmark") else { return nil }
+        var stale = false
+        return try? URL(resolvingBookmarkData: data, bookmarkDataIsStale: &stale)
+    }
+    var lastImportName: String? { UserDefaults.standard.string(forKey: "importName") }
+
+    /// 前回のフォルダから取り込み直す
+    func reimport() async {
+        guard let url = lastImportURL else { error = "前回のフォルダが見つかりません。選び直してください"; return }
+        await importFolder(url)
+    }
+
     /// 取り込みの進み具合 (画面に出す)
     @Published var importProgress = ""
+    /// メディアを裏で写している最中か (一覧や閲覧はその間も使える)
+    @Published var importingMedia = false
 
     /// collection.anki2 と collection.media のあるフォルダを取り込む。
-    /// 1 GB を超えることがあるので裏で進め、変わったファイルだけ写す (iCloud の未ダウンロード分はその場で落とす)
+    /// まずコレクション本体 (小さい) を写してすぐ一覧を出し、メディア (1 GB を超えることがある) は裏で差分だけ写す
     func importFolder(_ url: URL) async {
         loading = true; error = nil; importProgress = "準備しています…"
-        defer { loading = false; importProgress = "" }
         let dataDir = Self.dataDir, mediaDst = Self.mediaDir, colDst = Self.collectionPath
         let report: @Sendable (String) -> Void = { text in Task { @MainActor in self.importProgress = text } }
-        let result: Result<Int, Error> = await Task.detached(priority: .userInitiated) {
+
+        // 1) コレクション本体
+        let first: Result<URL, Error> = await Task.detached(priority: .userInitiated) {
             let fm = FileManager.default
             let ok = url.startAccessingSecurityScopedResource()
             defer { if ok { url.stopAccessingSecurityScopedResource() } }
@@ -120,7 +147,6 @@ final class Store: ObservableObject {
                 guard Self.exists(col) else {
                     throw NSError(domain: "AnkiPreview", code: 3, userInfo: [NSLocalizedDescriptionKey: "collection.anki2 が見つかりません"])
                 }
-                // コレクション本体 (小さい) は一時ファイルに写してから入れ替える
                 report("カードを写しています…")
                 let tmp = dataDir.appendingPathComponent("collection.incoming")
                 try? fm.removeItem(at: tmp)
@@ -128,36 +154,60 @@ final class Store: ObservableObject {
                 for side in ["collection.anki2-wal", "collection.anki2-shm"] { try? fm.removeItem(at: dataDir.appendingPathComponent(side)) }
                 try? fm.removeItem(at: colDst)
                 try fm.moveItem(at: tmp, to: colDst)
-                // メディアは差分だけ
-                let mediaSrc = src.appendingPathComponent("collection.media")
-                try fm.createDirectory(at: mediaDst, withIntermediateDirectories: true)
-                var copied = 0
-                if Self.exists(mediaSrc) {
-                    let names = (try fm.contentsOfDirectory(atPath: mediaSrc.path)).filter { !$0.hasPrefix(".") }
-                    let have: [String: Int] = Dictionary(uniqueKeysWithValues:
-                        ((try? fm.contentsOfDirectory(atPath: mediaDst.path)) ?? []).map { ($0, Self.size(mediaDst.appendingPathComponent($0))) })
-                    for (i, name) in names.enumerated() {
-                        if i % 20 == 0 { report("メディアを写しています… \(i) / \(names.count)") }
-                        let from = mediaSrc.appendingPathComponent(name)
-                        let to = mediaDst.appendingPathComponent(name)
-                        let srcSize = Self.size(from)
-                        if let had = have[name], had == srcSize, srcSize > 0 { continue }
-                        try? fm.removeItem(at: to)
-                        do { try Self.copyWithDownload(from, to: to); copied += 1 } catch { /* 1 つ失敗しても続ける */ }
-                    }
-                }
-                return .success(copied)
+                return .success(src)
             } catch { return .failure(error) }
         }.value
-        switch result {
-        case .success:
-            importedAt = Date()
-            UserDefaults.standard.set(importedAt, forKey: "importedAt")
-            await load()
-        case .failure(let e):
-            self.error = e.localizedDescription
+        guard case .success(let src) = first else {
+            if case .failure(let e) = first { self.error = e.localizedDescription }
+            loading = false; importProgress = ""
+            return
         }
+        importedAt = Date()
+        UserDefaults.standard.set(importedAt, forKey: "importedAt")
+        // 次回は選び直さずに済むよう、フォルダの場所を覚える
+        if let bm = try? url.bookmarkData() {
+            UserDefaults.standard.set(bm, forKey: "importBookmark")
+            UserDefaults.standard.set(url.lastPathComponent, forKey: "importName")
+        }
+        await load()          // ここで一覧が出る。以降はメディアを裏で写すだけ
+        loading = false
+
+        // 2) メディア (差分)。写している間も閲覧できる
+        importingMedia = true
+        importProgress = "メディアを確認しています…"
+        let mediaResult: (copied: Int, missing: Int) = await Task.detached(priority: .utility) {
+            let fm = FileManager.default
+            let ok = url.startAccessingSecurityScopedResource()
+            defer { if ok { url.stopAccessingSecurityScopedResource() } }
+            let mediaSrc = src.appendingPathComponent("collection.media")
+            try? fm.createDirectory(at: mediaDst, withIntermediateDirectories: true)
+            guard Self.exists(mediaSrc), let names = try? fm.contentsOfDirectory(atPath: mediaSrc.path) else { return (0, 0) }
+            let list = names.filter { !$0.hasPrefix(".") }
+            let have: [String: Int] = Dictionary(uniqueKeysWithValues:
+                ((try? fm.contentsOfDirectory(atPath: mediaDst.path)) ?? []).map { ($0, Self.size(mediaDst.appendingPathComponent($0))) })
+            var copied = 0, missing = 0
+            for (i, name) in list.enumerated() {
+                report("メディアを写しています… \(i + 1) / \(list.count)" + (missing > 0 ? " (未ダウンロード \(missing))" : ""))
+                let from = mediaSrc.appendingPathComponent(name)
+                let to = mediaDst.appendingPathComponent(name)
+                let srcSize = Self.size(from)
+                if let had = have[name], had == srcSize, srcSize > 0 { continue }
+                try? fm.removeItem(at: to)
+                do { try Self.copyWithDownload(from, to: to); copied += 1 } catch { missing += 1 }
+            }
+            return (copied, missing)
+        }.value
+        importingMedia = false
+        importProgress = ""
+        if mediaResult.missing > 0 {
+            self.error = "\(mediaResult.missing) 件のメディアがまだ iCloud から落ちていません。Mac 側のアップロードが終わってから、もう一度取り込むと続きを写します"
+        }
+        // 写し終えたメディアがプレビューに出るよう、開いているカードを描き直す
+        mediaVersion += 1
     }
+
+    /// メディアが増えたら上げる (プレビューの描き直しのきっかけ)
+    @Published var mediaVersion = 0
 
     nonisolated private static func exists(_ url: URL) -> Bool {
         var isDir: ObjCBool = false
@@ -175,7 +225,7 @@ final class Store: ObservableObject {
     nonisolated private static func copyWithDownload(_ from: URL, to: URL) throws {
         let fm = FileManager.default
         var lastError: Error? = nil
-        for attempt in 0..<30 {
+        for attempt in 0..<6 {
             do {
                 var err: NSError? = nil
                 var inner: Error? = nil
@@ -188,7 +238,7 @@ final class Store: ObservableObject {
             } catch {
                 lastError = error
                 try? fm.startDownloadingUbiquitousItem(at: from)
-                Thread.sleep(forTimeInterval: attempt < 5 ? 0.5 : 2)
+                Thread.sleep(forTimeInterval: attempt < 3 ? 0.5 : 1.5)
             }
         }
         throw lastError ?? NSError(domain: "AnkiPreview", code: 4, userInfo: [NSLocalizedDescriptionKey: "ファイルを写せません"])

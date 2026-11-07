@@ -38,7 +38,7 @@ struct DetailView: View {
             let nt = store.notetypes[note.notetypeId]
             VStack(spacing: 0) {
                 if showFind { findBar(barDark: barDark) }
-                PreviewView(html: store.previewHTML(for: note, dark: dark), mediaDir: Store.mediaDir,
+                PreviewView(html: store.previewHTML(for: note, dark: dark) + "<!-- media \(store.mediaVersion) -->", mediaDir: Store.mediaDir,
                             highlights: store.highlightTerms, controller: preview,
                             onImage: { url in lightbox = LightboxItem(url: url) })
                     .ignoresSafeArea(edges: .bottom)
@@ -271,12 +271,19 @@ struct NoteListView: View {
 
     var body: some View {
         List(selection: $store.selectedNoteId) {
-            if !store.allTags.isEmpty || !store.decks.isEmpty { filters }
             ForEach(store.filtered) { note in
                 NoteRow(note: note, query: store.query).tag(note.id)
             }
         }
         .listStyle(.plain)
+        // デッキ・学習状況・タグの帯は検索バーの直下に固定 (macOS 版と同じ)
+        .safeAreaInset(edge: .top, spacing: 0) {
+            if !store.allTags.isEmpty || !store.decks.isEmpty {
+                filters
+                    .padding(.vertical, 6)
+                    .background(.bar)
+            }
+        }
         .searchable(text: $store.keyword, placement: .navigationBarDrawer(displayMode: .always), prompt: "検索")
         .autocorrectionDisabled()
         .navigationTitle("Carrel")
@@ -304,6 +311,17 @@ struct NoteListView: View {
             }
             ToolbarItem(placement: .status) {
                 Text("\(store.filtered.count) 件").font(.footnote).foregroundStyle(.secondary).fixedSize()
+            }
+        }
+        .safeAreaInset(edge: .bottom) {
+            if store.importingMedia {
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text(store.importProgress).font(.footnote).foregroundStyle(.secondary).lineLimit(1)
+                }
+                .padding(.horizontal, 14).padding(.vertical, 8)
+                .background(.bar, in: Capsule())
+                .padding(.bottom, 6)
             }
         }
         .overlay {
@@ -334,7 +352,7 @@ struct NoteListView: View {
 
     /// デッキ・学習状況・タグのチップ (横スクロール)
     private var filters: some View {
-        Section {
+        Group {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     Menu {
@@ -360,10 +378,8 @@ struct NoteListView: View {
                         .buttonStyle(.plain)
                     }
                 }
-                .padding(.horizontal, 4)
+                .padding(.horizontal, 16)
             }
-            .listRowInsets(EdgeInsets(top: 4, leading: 12, bottom: 4, trailing: 12))
-            .listRowSeparator(.hidden)
         }
     }
 
@@ -448,12 +464,22 @@ struct SettingsView: View {
                     } else {
                         Text("まだ取り込んでいません").foregroundStyle(.secondary)
                     }
+                    if store.hasCollection, let name = store.lastImportName {
+                        Button {
+                            Task { await store.reimport() }
+                        } label: {
+                            HStack {
+                                Label("「\(name)」から更新", systemImage: "arrow.clockwise")
+                                if store.loading || store.importingMedia { Spacer(); ProgressView().controlSize(.small); Text(store.importProgress).font(.footnote).foregroundStyle(.secondary) }
+                            }
+                        }.disabled(store.loading || store.importingMedia)
+                    }
                     Button { picking = true } label: {
                         HStack {
-                            Label(store.hasCollection ? "取り込み直す…" : "フォルダを取り込む…", systemImage: "folder")
-                            if store.loading { Spacer(); ProgressView().controlSize(.small); Text(store.importProgress).font(.footnote).foregroundStyle(.secondary) }
+                            Label(store.hasCollection ? "別のフォルダを選ぶ…" : "フォルダを取り込む…", systemImage: "folder")
+                            if store.loading || store.importingMedia { Spacer(); ProgressView().controlSize(.small); Text(store.importProgress).font(.footnote).foregroundStyle(.secondary) }
                         }
-                    }.disabled(store.loading)
+                    }.disabled(store.loading || store.importingMedia)
                     Text("Mac の ~/Library/Application Support/Anki2/<プロフィール名>/ を iCloud Drive などに写し、そのフォルダを選んでください (collection.anki2 と collection.media が入っているもの)。").font(.footnote).foregroundStyle(.secondary)
                     if let e = store.error { Text(e).font(.footnote).foregroundStyle(.red) }
                 }
@@ -472,6 +498,15 @@ struct SettingsView: View {
                         Slider(value: $store.textZoom, in: 0.7...1.8, step: 0.05)
                         Text("\(Int(store.textZoom * 100))%").monospacedDigit().frame(width: 48, alignment: .trailing)
                     }
+                }
+                Section {
+                    Picker("アプリアイコン", selection: $store.appIcon) {
+                        Text("標準 (テーマに合わせる)").tag("")
+                        Text("海 (水色の地に白い C)").tag("CarrelSea")
+                    }
+                    .onChange(of: store.appIcon) { _, name in store.applyAppIcon(name) }
+                } header: { Text("アイコン") } footer: {
+                    Text("標準はライト / ダークに合わせて地の色が変わり、C だけが水色になります。")
                 }
                 Section("一覧") {
                     Toggle("タグを表示", isOn: $store.showTagsInList)
