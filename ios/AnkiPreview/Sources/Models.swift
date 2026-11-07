@@ -85,7 +85,7 @@ struct CardInfo: Identifiable, Hashable {
     let id: Int64
     let noteId: Int64
     let ord: Int
-    let deckId: Int64
+    var deckId: Int64
     let queue: Int
     let type: Int
     let due: Int64

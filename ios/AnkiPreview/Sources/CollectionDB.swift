@@ -39,6 +39,27 @@ final class CollectionDB {
         while sqlite3_step(stmt) == SQLITE_ROW { row(stmt) }
     }
 
+    /// 書き込み (iPhone 内のコピーに対してだけ使う)
+    func exec(_ sql: String) throws {
+        if sqlite3_exec(db, sql, nil, nil, nil) != SQLITE_OK {
+            throw NSError(domain: "AnkiPreview", code: 5, userInfo: [NSLocalizedDescriptionKey: String(cString: sqlite3_errmsg(db))])
+        }
+    }
+    private static func quote(_ s: String) -> String { "'" + s.replacingOccurrences(of: "'", with: "''") + "'" }
+
+    /// ノートのタグを書き換える (Anki と同じく前後に空白を付けて保存)
+    func setTags(noteId: Int64, tags: [String]) throws {
+        let joined = tags.isEmpty ? "" : " " + tags.joined(separator: " ") + " "
+        let now = Int64(Date().timeIntervalSince1970)
+        try exec("update notes set tags = \(Self.quote(joined)), mod = \(now), usn = -1 where id = \(noteId)")
+    }
+
+    /// ノートの全カードを別のデッキへ
+    func setDeck(noteId: Int64, deckId: Int64) throws {
+        let now = Int64(Date().timeIntervalSince1970)
+        try exec("update cards set did = \(deckId), mod = \(now), usn = -1 where nid = \(noteId)")
+    }
+
     private func text(_ stmt: OpaquePointer, _ col: Int32) -> String {
         guard let c = sqlite3_column_text(stmt, col) else { return "" }
         return String(cString: c)

@@ -277,6 +277,36 @@ final class Store: ObservableObject {
         }
     }
 
+    // ---- 編集 (この iPhone 内のコピーだけが変わる。Anki には反映されない) ----
+
+    func setTags(_ note: Note, _ tags: [String]) {
+        let clean = Array(NSOrderedSet(array: tags.map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty })) as! [String]
+        do {
+            let db = try CollectionDB(path: Self.collectionPath.path)
+            try db.setTags(noteId: note.id, tags: clean)
+        } catch { self.error = "タグを書き換えられません: " + error.localizedDescription; return }
+        if let i = notes.firstIndex(where: { $0.id == note.id }) {
+            notes[i] = Note(id: note.id, notetypeId: note.notetypeId, fields: note.fields, tags: clean, modified: Int64(Date().timeIntervalSince1970))
+        }
+        var count: [String: Int] = [:]
+        for n in notes { for t in n.tags { count[t, default: 0] += 1 } }
+        allTags = count.sorted { $0.value != $1.value ? $0.value > $1.value : $0.key < $1.key }
+        refilter()
+    }
+
+    func setDeck(_ note: Note, _ deckId: Int64) {
+        do {
+            let db = try CollectionDB(path: Self.collectionPath.path)
+            try db.setDeck(noteId: note.id, deckId: deckId)
+        } catch { self.error = "デッキを変えられません: " + error.localizedDescription; return }
+        noteDecks[note.id] = deckId
+        if var cs = cards[note.id] {
+            for i in cs.indices { cs[i].deckId = deckId }
+            cards[note.id] = cs
+        }
+        refilter()
+    }
+
     // ---- 学習状況 ----
 
     func deckName(for note: Note) -> String {

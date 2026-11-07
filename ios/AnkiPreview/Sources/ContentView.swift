@@ -49,7 +49,7 @@ struct DetailView: View {
             .toolbarBackground(bg, for: .navigationBar, .bottomBar)
             .toolbarBackground(.visible, for: .navigationBar, .bottomBar)
             .toolbarColorScheme(barDark ? .dark : .light, for: .navigationBar, .bottomBar)
-            .navigationTitle(note.titleLines.first ?? "")
+            .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
             .toolbarRole(.editor)
             .toolbar {
@@ -145,16 +145,48 @@ struct CardInfoView: View {
     @EnvironmentObject var store: Store
     @Environment(\.dismiss) var dismiss
     let note: Note
+    @State private var newTag = ""
+
+    /// 編集後も最新の内容を見せる
+    private var current: Note { store.notes.first { $0.id == note.id } ?? note }
 
     var body: some View {
         NavigationStack {
             List {
                 Section("ノート") {
-                    LabeledContent("ノートタイプ", value: store.notetypes[note.notetypeId]?.name ?? "")
-                    LabeledContent("デッキ", value: store.deckName(for: note))
-                    if !note.tags.isEmpty { LabeledContent("タグ", value: note.tags.joined(separator: " ")) }
-                    LabeledContent("作成", value: note.created.formatted(date: .abbreviated, time: .shortened))
-                    LabeledContent("更新", value: Date(timeIntervalSince1970: Double(note.modified)).formatted(date: .abbreviated, time: .shortened))
+                    LabeledContent("ノートタイプ", value: store.notetypes[current.notetypeId]?.name ?? "")
+                    Picker("デッキ", selection: Binding(
+                        get: { store.noteDecks[current.id] ?? 0 },
+                        set: { store.setDeck(current, $0) })) {
+                        ForEach(store.decks) { d in Text(d.name).tag(d.id) }
+                    }
+                    LabeledContent("作成", value: current.created.formatted(date: .abbreviated, time: .shortened))
+                    LabeledContent("更新", value: Date(timeIntervalSince1970: Double(current.modified)).formatted(date: .abbreviated, time: .shortened))
+                }
+                Section {
+                    if !current.tags.isEmpty {
+                        TagChips(tags: current.tags, wrap: true) { tag in
+                            store.setTags(current, current.tags.filter { $0 != tag })
+                        }
+                        .padding(.vertical, 2)
+                    }
+                    HStack {
+                        TextField("タグを追加", text: $newTag)
+                            .autocorrectionDisabled()
+                            .textInputAutocapitalization(.never)
+                            .onSubmit(addTag)
+                        // よく使うタグから選ぶ
+                        let candidates = store.allTags.map(\.0).filter { !current.tags.contains($0) }
+                        if !candidates.isEmpty {
+                            Menu {
+                                ForEach(candidates.prefix(30), id: \.self) { t in
+                                    Button(t) { store.setTags(current, current.tags + [t]) }
+                                }
+                            } label: { Image(systemName: "plus.circle") }
+                        }
+                    }
+                } header: { Text("タグ") } footer: {
+                    Text("デッキとタグの変更は、この iPhone 内のコピーにだけ保存されます。Anki 本体には反映されず、次にフォルダから取り込み直すと元に戻ります。")
                 }
                 ForEach(store.cards[note.id] ?? []) { c in
                     let name = store.notetypes[note.notetypeId]?.templates[safe: c.ord]?.name ?? "カード \(c.ord + 1)"
@@ -177,6 +209,73 @@ struct CardInfoView: View {
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完了") { dismiss() } } }
         }
         .presentationDetents([.medium, .large])
+    }
+
+    private func addTag() {
+        let t = newTag.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: " ", with: "_")
+        guard !t.isEmpty else { return }
+        if !current.tags.contains(t) { store.setTags(current, current.tags + [t]) }
+        newTag = ""
+    }
+}
+
+/// タグを小さなチップで並べる。wrap = true なら折り返し、false なら 1 行に収まる分だけ
+struct TagChips: View {
+    let tags: [String]
+    var wrap = false
+    var onRemove: ((String) -> Void)? = nil
+
+    var body: some View {
+        if wrap {
+            FlowLayout(spacing: 6) { ForEach(tags, id: \.self) { chip($0) } }
+        } else {
+            HStack(spacing: 5) {
+                ForEach(tags, id: \.self) { chip($0) }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .clipped()
+        }
+    }
+
+    private func chip(_ tag: String) -> some View {
+        HStack(spacing: 3) {
+            Image(systemName: "tag.fill").font(.system(size: 8))
+            Text(tag).font(.caption2).lineLimit(1)
+            if let onRemove {
+                Button { onRemove(tag) } label: { Image(systemName: "xmark").font(.system(size: 8, weight: .bold)) }
+                    .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 7).padding(.vertical, 3)
+        .background(Color.accentColor.opacity(0.12), in: Capsule())
+        .foregroundStyle(Color.accentColor)
+        .fixedSize()
+    }
+}
+
+/// 折り返す横並び
+struct FlowLayout: Layout {
+    var spacing: CGFloat = 6
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let width = proposal.width ?? .infinity
+        var x: CGFloat = 0, y: CGFloat = 0, rowH: CGFloat = 0
+        for v in subviews {
+            let s = v.sizeThatFits(.unspecified)
+            if x > 0, x + s.width > width { x = 0; y += rowH + spacing; rowH = 0 }
+            x += s.width + spacing; rowH = max(rowH, s.height)
+        }
+        return CGSize(width: width == .infinity ? x : width, height: y + rowH)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var x: CGFloat = 0, y: CGFloat = 0, rowH: CGFloat = 0
+        for v in subviews {
+            let s = v.sizeThatFits(.unspecified)
+            if x > 0, x + s.width > bounds.width { x = 0; y += rowH + spacing; rowH = 0 }
+            v.place(at: CGPoint(x: bounds.minX + x, y: bounds.minY + y), proposal: .unspecified)
+            x += s.width + spacing; rowH = max(rowH, s.height)
+        }
     }
 }
 
@@ -436,14 +535,14 @@ struct NoteRow: View {
             }
             VStack(alignment: .leading, spacing: 3) {
                 let lines = note.titleLines
-                if let first = lines.first { Text(first).font(.headline).lineLimit(1) }
+                if let first = lines.first { Text(first).font(.headline).lineLimit(2) }
                 ForEach(Array(lines.dropFirst().enumerated()), id: \.offset) { _, line in
                     Text(line).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
                 }
                 if let snip = snippet {
                     Text(snip).font(.caption).foregroundStyle(.secondary).lineLimit(2)
                 } else if store.showTagsInList, !note.tags.isEmpty {
-                    Text(note.tags.joined(separator: "  ")).font(.caption2).foregroundStyle(.tertiary).lineLimit(1)
+                    TagChips(tags: note.tags)
                 }
             }
             Spacer(minLength: 0)
