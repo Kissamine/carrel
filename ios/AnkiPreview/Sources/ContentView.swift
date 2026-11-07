@@ -453,7 +453,7 @@ struct NoteListView: View {
         .navigationTitle("Carrel")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .principal) { CarrelLogoView(height: 18) }
+            ToolbarItem(placement: .topBarLeading) { CarrelLogoView(height: 18).padding(.leading, 4) }
             if !wide {
                 ToolbarItem(placement: .topBarTrailing) { optionsMenu }
             }
