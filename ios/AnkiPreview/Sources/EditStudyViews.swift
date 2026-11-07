@@ -215,6 +215,8 @@ struct StudyView: View {
                                 highlights: [], controller: preview,
                                 onImage: { url in store.lightbox = LightboxItem(url: url) })
                         .ignoresSafeArea()
+                        .id(card.id)                 // カードが変わったら作り直して、フェードで切り替える
+                        .transition(.opacity)
                         .overlay(alignment: .bottom) { answerBar(card) }
                     // カウンター (プレビューの「1 / 114」と同じ見た目)。スクロールしても動かないよう、カードの上に重ねて固定
                     .overlay(alignment: .top) {
@@ -316,31 +318,34 @@ struct StudyView: View {
     private func answer(_ card: CardInfo, _ ease: Scheduler.Ease) {
         let spent = Int(Date().timeIntervalSince(shownAt) * 1000)
         let next = store.answer(card, ease: ease, spentMs: spent)
-        queue.removeFirst()
-        // すぐ (10 分以内) にまた出る学習中カードは、列の後ろに戻す
-        if next.queue == 1, Double(next.due) - Date().timeIntervalSince1970 < 600 { queue.append(next) }
-        done += 1
-        showBack = false; shownAt = Date()
+        withAnimation(.easeInOut(duration: 0.3)) {
+            queue.removeFirst()
+            // すぐ (10 分以内) にまた出る学習中カードは、列の後ろに戻す
+            if next.queue == 1, Double(next.due) - Date().timeIntervalSince1970 < 600 { queue.append(next) }
+            done += 1
+            showBack = false
+        }
+        shownAt = Date()
     }
 
     private func skip() {
         guard !queue.isEmpty else { return }
-        queue.append(queue.removeFirst())
-        showBack = false; shownAt = Date()
+        withAnimation(.easeInOut(duration: 0.3)) { queue.append(queue.removeFirst()); showBack = false }
+        shownAt = Date()
     }
 
     /// 今回の学習からは外す (記録はしない)
     private func dropCurrent() {
         guard !queue.isEmpty else { return }
-        queue.removeFirst()
-        showBack = false; shownAt = Date()
+        withAnimation(.easeInOut(duration: 0.3)) { queue.removeFirst(); showBack = false }
+        shownAt = Date()
     }
 
     private func suspend(_ card: CardInfo) {
         var c = card; c.queue = -1
         store.setCardQueue(c)
-        queue.removeFirst()
-        showBack = false; shownAt = Date()
+        withAnimation(.easeInOut(duration: 0.3)) { queue.removeFirst(); showBack = false }
+        shownAt = Date()
     }
 }
 
