@@ -291,9 +291,9 @@ struct LightboxView: View {
     var body: some View {
         GeometryReader { geo in
             // 画像は常に画面いっぱい (サイドバーも出さない)。ボタンは画像の上に重ねる:
-            // 横長 (Duo を開いて横向き) では右端に縦に、縦長では右下に横に
+            // 横長 (Duo を開いて横向き) では右端に縦に、縦長では下の中央に横に
             let wide = geo.size.width > geo.size.height
-            ZStack(alignment: wide ? .trailing : .bottomTrailing) {
+            ZStack(alignment: wide ? .trailing : .bottom) {
                 Color.black.ignoresSafeArea()
                 if let img = UIImage(contentsOfFile: url.path) {
                     ZoomableImage(image: img).ignoresSafeArea()
