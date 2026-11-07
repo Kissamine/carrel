@@ -306,6 +306,7 @@ struct LightboxView: View {
                     }
                     .padding(16)
                 } else {
+                    // スマホ幅では画像の枠を画面幅いっぱいに
                     VStack(spacing: 12) {
                         imageArea
                         HStack(spacing: 10) {
@@ -313,8 +314,9 @@ struct LightboxView: View {
                             shareButton
                             closeButton
                         }
+                        .padding(.horizontal, 16)
                     }
-                    .padding(16)
+                    .padding(.vertical, 16)
                 }
             }
         }
