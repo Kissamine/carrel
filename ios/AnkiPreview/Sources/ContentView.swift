@@ -450,7 +450,7 @@ struct NoteListView: View {
         .searchable(text: $store.keyword, placement: .toolbar, prompt: "検索")
         .searchToolbarBehavior(.minimize)
         .autocorrectionDisabled()
-        .navigationTitle("Carrel")
+        .navigationTitle("")   // 題はロゴ (左端) で出すので、文字の題は空に
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarLeading) { CarrelLogoView(height: 18).padding(.leading, 4) }
