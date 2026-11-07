@@ -762,9 +762,7 @@ struct SettingsView: View {
                         Text("テキスト").tag("text")
                         Text("HTML").tag("html")
                     }
-                } header: { Text("プレビューと編集") } footer: {
-                    Text("「最初に見せる面」はカードを開いたときに出す面で、右上の「表 / 裏」でいつでも切り替えられます (学習では常に表面から)。編集モードはカードを編集するときの初期モードで、編集画面でも切り替えられます。テキストモードは文章として直し、HTML モードはタグをそのまま直します。")
-                }
+                } header: { Text("プレビューと編集") }
             }
             .navigationTitle("設定")
             .navigationBarTitleDisplayMode(.inline)

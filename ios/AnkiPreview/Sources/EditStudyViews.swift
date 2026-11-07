@@ -57,6 +57,7 @@ struct NoteEditorView: View {
                         ForEach(store.decks) { d in Text(d.name).tag(d.id) }
                     }
                 }
+                .padding(.top, 14)   // 題との間を少しあける
                 Section {
                     Picker("編集モード", selection: $mode) {
                         Text("テキスト").tag("text")
@@ -93,7 +94,7 @@ struct NoteEditorView: View {
             .navigationTitle(note == nil ? "新しいカード" : "カードを編集")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("キャンセル") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { Button { dismiss() } label: { Image(systemName: "xmark") } }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("保存") { save() }.fontWeight(.semibold)
                         .disabled(fields.allSatisfy { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty })
