@@ -289,6 +289,40 @@ struct LightboxView: View {
     let url: URL
 
     var body: some View {
+        GeometryReader { geo in
+            // 横長の見開き (Duo を開いて横向き) ではボタンを右の縦列に、それ以外は画像の下の右寄せに
+            let wide = geo.size.width > 700 && geo.size.width > geo.size.height
+            ZStack {
+                Color(.systemBackground).ignoresSafeArea()
+                if wide {
+                    HStack(spacing: 12) {
+                        imageArea
+                        VStack(spacing: 12) {
+                            closeButton
+                            shareButton
+                        }
+                        .frame(width: 64)
+                    }
+                    .padding(16)
+                } else {
+                    VStack(spacing: 12) {
+                        imageArea
+                        HStack(spacing: 10) {
+                            Spacer()
+                            shareButton
+                            closeButton
+                        }
+                    }
+                    .padding(16)
+                }
+            }
+        }
+        .colorScheme(.dark)
+        .statusBarHidden()
+    }
+
+    /// 画像の表示域 (角丸の黒い枠の中でピンチ拡大できる)
+    private var imageArea: some View {
         ZStack {
             Color.black
             if let img = UIImage(contentsOfFile: url.path) {
@@ -297,33 +331,20 @@ struct LightboxView: View {
                 ContentUnavailableView("画像を開けません", systemImage: "photo").foregroundStyle(.white)
             }
         }
+        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .ignoresSafeArea()
-        .overlay {
-            GeometryReader { geo in
-                // 横長の見開き (Duo を開いて横向き) ではサイドバーの右下あたり、それ以外は画面の右下
-                let wide = geo.size.width > 700 && geo.size.width > geo.size.height
-                buttons
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
-                    .padding(.trailing, wide ? geo.size.width * 0.66 : 0)
-            }
-        }
-        .statusBarHidden()
-        .onTapGesture { dismiss() }
     }
 
-    /// 共有と閉じる (Liquid Glass)
-    private var buttons: some View {
-        HStack(spacing: 10) {
-            ShareLink(item: url) { Image(systemName: "square.and.arrow.up").frame(width: 24, height: 24) }
-                .buttonStyle(.glass)
-            Button { dismiss() } label: { Image(systemName: "xmark").frame(width: 24, height: 24) }
-                .buttonStyle(.glass)
-        }
-        .font(.title3.weight(.semibold))
-        .foregroundStyle(.white)
-        .colorScheme(.dark)
-        .padding()
+    private var shareButton: some View {
+        ShareLink(item: url) { Image(systemName: "square.and.arrow.up").frame(width: 28, height: 28) }
+            .buttonStyle(.glass)
+            .font(.title3.weight(.semibold))
+    }
+
+    private var closeButton: some View {
+        Button { dismiss() } label: { Image(systemName: "xmark").frame(width: 28, height: 28) }
+            .buttonStyle(.glass)
+            .font(.title3.weight(.semibold))
     }
 }
 
