@@ -210,7 +210,7 @@ struct StudyView: View {
                     PreviewView(html: store.studyHTML(card: card, back: showBack, dark: dark), mediaDir: Store.mediaDir,
                                 highlights: [], controller: preview,
                                 onImage: { url in store.lightbox = LightboxItem(url: url) })
-                        .padding(.top, 44)   // 固定のカウンターの下に少し余白をとる
+                        .padding(.top, 34)   // 固定のカウンターの下に少し余白をとる
                         .safeAreaInset(edge: .bottom, spacing: 0) { answerBar(card) }
                     // カウンター (プレビューの「1 / 114」と同じ見た目)。スクロールしても動かないよう、カードの上に重ねて固定
                     .overlay(alignment: .top) {
