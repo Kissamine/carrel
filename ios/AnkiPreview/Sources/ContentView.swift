@@ -290,8 +290,9 @@ struct LightboxView: View {
 
     var body: some View {
         GeometryReader { geo in
-            // 横長の見開き (Duo を開いて横向き) ではボタンを右の縦列に、それ以外は画像の下の右寄せに
-            let wide = geo.size.width > 700 && geo.size.width > geo.size.height
+            // 横長 (Duo を開いて横向き・サイドバーが出る向き) ではボタンを右の縦列に、縦長なら画像の下の右寄せに。
+            // Duo を開いた画面は約 667pt 幅しかないので、幅の絶対値ではなく縦横の比で判断する
+            let wide = geo.size.width > geo.size.height
             ZStack {
                 Color(.systemBackground).ignoresSafeArea()
                 if wide {
@@ -336,15 +337,25 @@ struct LightboxView: View {
     }
 
     private var shareButton: some View {
-        ShareLink(item: url) { Image(systemName: "square.and.arrow.up").frame(width: 28, height: 28) }
-            .buttonStyle(.glass)
-            .font(.title3.weight(.semibold))
+        ShareLink(item: url) { Image(systemName: "square.and.arrow.up").modifier(RoundGlass()) }
+            .buttonStyle(.plain)
     }
 
     private var closeButton: some View {
-        Button { dismiss() } label: { Image(systemName: "xmark").frame(width: 28, height: 28) }
-            .buttonStyle(.glass)
+        Button { dismiss() } label: { Image(systemName: "xmark").modifier(RoundGlass()) }
+            .buttonStyle(.plain)
+    }
+}
+
+/// OS 標準と同じ正円の Liquid Glass ボタン
+private struct RoundGlass: ViewModifier {
+    func body(content: Content) -> some View {
+        content
             .font(.title3.weight(.semibold))
+            .foregroundStyle(.white)
+            .frame(width: 48, height: 48)
+            .contentShape(Circle())
+            .glassEffect(.regular.interactive(), in: Circle())
     }
 }
 
