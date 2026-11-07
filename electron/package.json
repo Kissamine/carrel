@@ -84,7 +84,8 @@
           "path": "/Applications"
         }
       ]
-    }
+    },
+    "copyright": "Copyright © 2026 Kujo Haru"
   },
   "devDependencies": {
     "electron": "^44.0.0",
@@ -102,7 +103,7 @@
     "mathjax": "^3.2.2"
   },
   "license": "AGPL-3.0-or-later",
-  "author": "Kissamine",
+  "author": "Kujo Haru",
   "homepage": "https://github.com/Kissamine/carrel",
   "repository": {
     "type": "git",

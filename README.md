@@ -75,4 +75,6 @@ app/ shared/  以前の Android 版と Compose 版 (保守は停止)
 
 ## ライセンス
 
+Copyright © 2026 Kujo Haru
+
 [AGPL-3.0-or-later](LICENSE)。同梱しているソフトウェアのライセンスは [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) にまとめています。
