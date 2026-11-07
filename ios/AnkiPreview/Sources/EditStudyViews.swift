@@ -210,6 +210,7 @@ struct StudyView: View {
                         PreviewView(html: store.studyHTML(card: card, back: showBack, dark: dark), mediaDir: Store.mediaDir,
                                     highlights: [], controller: preview,
                                     onImage: { url in store.lightbox = LightboxItem(url: url) })
+                            .padding(.top, -10)   // カウンターとカードの間を少し詰める
                         answerBar(card)
                     }
                     .background(bg)
@@ -235,7 +236,8 @@ struct StudyView: View {
                     ToolbarItem(placement: .principal) {
                         Text("\(min(done + 1, total)) / \(total)")
                             .font(.footnote).monospacedDigit().foregroundStyle(.secondary).fixedSize()
-                            .padding(.horizontal, 8)
+                            .padding(.horizontal, 14).padding(.vertical, 8)
+                            .glassEffect(.regular, in: Capsule())
                     }
                 }
                 if let card = current {
@@ -270,6 +272,7 @@ struct StudyView: View {
                     Text("答えを見る").font(.headline).frame(maxWidth: .infinity).padding(.vertical, 6)
                 }
                 .buttonStyle(.glassProminent)
+                .tint(Color.carrelBlue)   // テーマの水色 (宮古島ブルー) の Liquid Glass
             } else {
                 ForEach(Scheduler.Ease.allCases, id: \.rawValue) { ease in
                     Button { answer(card, ease) } label: {
