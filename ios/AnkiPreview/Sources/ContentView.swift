@@ -290,52 +290,25 @@ struct LightboxView: View {
 
     var body: some View {
         GeometryReader { geo in
-            // 横長 (Duo を開いて横向き・サイドバーが出る向き) ではボタンを右の縦列に、縦長なら画像の下の右寄せに。
-            // Duo を開いた画面は約 667pt 幅しかないので、幅の絶対値ではなく縦横の比で判断する
+            // 画像は常に画面いっぱい (サイドバーも出さない)。ボタンは画像の上に重ねる:
+            // 横長 (Duo を開いて横向き) では右端に縦に、縦長では右下に横に
             let wide = geo.size.width > geo.size.height
-            ZStack {
-                Color(.systemBackground).ignoresSafeArea()
-                if wide {
-                    HStack(spacing: 12) {
-                        imageArea
-                        VStack(spacing: 12) {
-                            closeButton
-                            shareButton
-                        }
-                        .frame(width: 64)
-                    }
-                    .padding(16)
+            ZStack(alignment: wide ? .trailing : .bottomTrailing) {
+                Color.black.ignoresSafeArea()
+                if let img = UIImage(contentsOfFile: url.path) {
+                    ZoomableImage(image: img).ignoresSafeArea()
                 } else {
-                    // スマホ幅では画像の枠を画面幅いっぱいに
-                    VStack(spacing: 12) {
-                        imageArea
-                        HStack(spacing: 10) {
-                            Spacer()
-                            shareButton
-                            closeButton
-                        }
-                        .padding(.horizontal, 16)
-                    }
-                    .padding(.vertical, 16)
+                    ContentUnavailableView("画像を開けません", systemImage: "photo").foregroundStyle(.white)
+                }
+                if wide {
+                    VStack(spacing: 12) { closeButton; shareButton }.padding(16)
+                } else {
+                    HStack(spacing: 10) { shareButton; closeButton }.padding(16)
                 }
             }
         }
         .colorScheme(.dark)
         .statusBarHidden()
-    }
-
-    /// 画像の表示域 (角丸の黒い枠の中でピンチ拡大できる)
-    private var imageArea: some View {
-        ZStack {
-            Color.black
-            if let img = UIImage(contentsOfFile: url.path) {
-                ZoomableImage(image: img)
-            } else {
-                ContentUnavailableView("画像を開けません", systemImage: "photo").foregroundStyle(.white)
-            }
-        }
-        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var shareButton: some View {
