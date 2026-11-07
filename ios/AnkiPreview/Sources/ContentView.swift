@@ -557,9 +557,10 @@ struct NoteListView: View {
                     .buttonStyle(.plain)
             }
         }
-        .padding(.horizontal, 10).padding(.vertical, 8)
-        .background(Color(.secondarySystemFill), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .padding(.horizontal, 14).padding(.vertical, 9)
+        .glassEffect(.regular, in: Capsule())
         .padding(.horizontal, 16)
+        .padding(.bottom, 6)   // タグ一覧との間を少しあける
     }
 
     /// タグのチップ (横スクロール)。デッキと学習状況はメニューから
