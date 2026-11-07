@@ -317,8 +317,9 @@ struct StudyView: View {
 
     private func answer(_ card: CardInfo, _ ease: Scheduler.Ease) {
         let spent = Int(Date().timeIntervalSince(shownAt) * 1000)
-        let next = store.answer(card, ease: ease, spentMs: spent)
-        withAnimation(.easeInOut(duration: 0.7)) {
+        // Store の更新も同じトランザクションに入れないと、先に描き直されてフェードが付かない
+        withAnimation(.easeInOut(duration: 0.3)) {
+            let next = store.answer(card, ease: ease, spentMs: spent)
             queue.removeFirst()
             // すぐ (10 分以内) にまた出る学習中カードは、列の後ろに戻す
             if next.queue == 1, Double(next.due) - Date().timeIntervalSince1970 < 600 { queue.append(next) }
@@ -330,21 +331,21 @@ struct StudyView: View {
 
     private func skip() {
         guard !queue.isEmpty else { return }
-        withAnimation(.easeInOut(duration: 0.7)) { queue.append(queue.removeFirst()); showBack = false }
+        withAnimation(.easeInOut(duration: 0.3)) { queue.append(queue.removeFirst()); showBack = false }
         shownAt = Date()
     }
 
     /// 今回の学習からは外す (記録はしない)
     private func dropCurrent() {
         guard !queue.isEmpty else { return }
-        withAnimation(.easeInOut(duration: 0.7)) { queue.removeFirst(); showBack = false }
+        withAnimation(.easeInOut(duration: 0.3)) { queue.removeFirst(); showBack = false }
         shownAt = Date()
     }
 
     private func suspend(_ card: CardInfo) {
         var c = card; c.queue = -1
         store.setCardQueue(c)
-        withAnimation(.easeInOut(duration: 0.7)) { queue.removeFirst(); showBack = false }
+        withAnimation(.easeInOut(duration: 0.3)) { queue.removeFirst(); showBack = false }
         shownAt = Date()
     }
 }
