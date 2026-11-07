@@ -263,17 +263,17 @@ struct StudyView: View {
             if !showBack {
                 // あとで (列の最後に回す) / スキップ (今回は出さない) / 答えを見る
                 Button { skip() } label: {
-                    Image(systemName: "arrow.uturn.forward").font(.title3).frame(width: 56).padding(.vertical, 10)
+                    Image(systemName: "arrow.uturn.forward").font(.title3).frame(width: 56, height: 26).padding(.vertical, 6)
                 }
                 .buttonStyle(.glass)
                 .simultaneousGesture(LongPressGesture(minimumDuration: 0.35).onEnded { _ in showTip("あとで (列の最後へ)") })
                 Button { dropCurrent() } label: {
-                    Image(systemName: "forward.end").font(.title3).frame(width: 56).padding(.vertical, 10)
+                    Image(systemName: "forward.end").font(.title3).frame(width: 56, height: 26).padding(.vertical, 6)
                 }
                 .buttonStyle(.glass)
                 .simultaneousGesture(LongPressGesture(minimumDuration: 0.35).onEnded { _ in showTip("スキップ (今回は出さない)") })
                 Button { showBack = true } label: {
-                    Text("答えを見る").font(.headline).frame(maxWidth: .infinity).padding(.vertical, 6)
+                    Text("答えを見る").font(.headline).frame(maxWidth: .infinity, minHeight: 26).padding(.vertical, 6)
                 }
                 .buttonStyle(.glassProminent)
                 .tint(Color.carrelBlueDeep)   // テーマの水色 (宮古島ブルー) の Liquid Glass
@@ -282,7 +282,7 @@ struct StudyView: View {
                     Button { answer(card, ease) } label: {
                         Text(ease.label).font(.title2.weight(.bold))
                             .foregroundStyle(color(for: ease))
-                            .frame(maxWidth: .infinity).padding(.vertical, 10)
+                            .frame(maxWidth: .infinity, minHeight: 26).padding(.vertical, 6)   // 「答えを見る」と同じ高さ
                     }
                     .buttonStyle(.glass)
                 }
