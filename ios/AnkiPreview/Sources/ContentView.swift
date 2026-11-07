@@ -687,6 +687,7 @@ struct SettingsView: View {
     @Environment(\.dismiss) var dismiss
     @State private var picking = false
     @State private var confirmUnlink = false
+    @State private var showFolderHelp = false
 
     var body: some View {
         NavigationStack {
@@ -710,22 +711,25 @@ struct SettingsView: View {
                                 if store.loading || store.importingMedia { Spacer(); ProgressView().controlSize(.small); Text(store.importProgress).font(.footnote).foregroundStyle(.secondary) }
                             }
                         }.disabled(store.loading || store.importingMedia)
-                        Button { picking = true } label: { Label("別のフォルダを選ぶ…", systemImage: "folder") }
-                            .disabled(store.loading || store.importingMedia)
                         Button(role: .destructive) { confirmUnlink = true } label: { Label("同期を解除", systemImage: "link.badge.minus") }
                     } else {
-                        Button { picking = true } label: {
-                            HStack {
-                                Label("フォルダを選ぶ…", systemImage: "folder")
-                                if store.loading || store.importingMedia { Spacer(); ProgressView().controlSize(.small); Text(store.importProgress).font(.footnote).foregroundStyle(.secondary) }
-                            }
-                        }.disabled(store.loading || store.importingMedia)
+                        HStack {
+                            Button { picking = true } label: {
+                                HStack {
+                                    Label("フォルダを選ぶ…", systemImage: "folder")
+                                    if store.loading || store.importingMedia { Spacer(); ProgressView().controlSize(.small); Text(store.importProgress).font(.footnote).foregroundStyle(.secondary) }
+                                }
+                            }.disabled(store.loading || store.importingMedia)
+                            Spacer()
+                            Button { showFolderHelp = true } label: { Image(systemName: "questionmark.circle").foregroundStyle(.secondary) }
+                                .buttonStyle(.plain)
+                        }
                     }
                     if let e = store.error { Text(e).font(.footnote).foregroundStyle(.red) }
                 } header: { Text("外部ファイルの同期") } footer: {
-                    Text(store.lastImportName == nil
-                         ? "Anki のコレクション (collection.anki2 と collection.media の入ったフォルダ) を iCloud Drive などに置き、ここで選ぶと、そのカードを Carrel で見る・学ぶ・直すことができます。macOS 版 Carrel の「Anki 連携」で書き出したフォルダを選ぶのが簡単です。同期しなくても、Carrel の中だけでカードを作って学べます。"
-                         : "iPhone で作った・直した・学習した内容はこのフォルダへ自動で書き出され、Mac 側の変更はアプリを開いたときに取り込みます。")
+                    if store.lastImportName != nil {
+                        Text("iOS 版で作った・直した・学習した内容はこのフォルダへ自動で書き出され、Mac 側の変更はアプリを開いたときに取り込みます。")
+                    }
                 }
                 Section("データ") {
                     LabeledContent("ノート", value: "\(store.notes.count) 件")
@@ -756,6 +760,11 @@ struct SettingsView: View {
             .navigationTitle("設定")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完了") { dismiss() } } }
+            .alert("外部ファイルの同期とは", isPresented: $showFolderHelp) {
+                Button("閉じる", role: .cancel) {}
+            } message: {
+                Text("Anki 形式のファイル (.anki2) とメディアのフォルダ (collection.media) が入ったフォルダを選ぶと、その中のカードを Carrel で見る・学ぶ・直すことができます。Anki のコレクションに限らず、同じ形式のファイルならどれでも構いません。iCloud Drive などのクラウドに置いたフォルダを選べば、ほかの端末と自動で同期できます (macOS 版 Carrel の「バックアップと同期」で書き出したフォルダを選ぶのが簡単です)。同期しなくても、Carrel の中だけでカードを作って学べます。")
+            }
             .confirmationDialog("同期を解除しますか？", isPresented: $confirmUnlink, titleVisibility: .visible) {
                 Button("解除", role: .destructive) { store.unlinkSyncFolder() }
             } message: { Text("フォルダとの結びつきを外します。アプリ内のカードはそのまま残り、以後は自動で取り込み・書き出しをしません") }
