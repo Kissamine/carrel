@@ -454,9 +454,10 @@ struct NoteListView: View {
         List(selection: $store.selectedNoteId) {
             ForEach(Array(store.filtered.enumerated()), id: \.element.id) { i, note in
                 NoteRow(note: note, query: store.query).tag(note.id)
-                    // 左にスワイプで削除 (確認してから)
+                    // 左にスワイプで削除 (確認してから)。role を destructive にすると確認前に行が消える動きが入って
+                    // アラートと同時に戻る不自然な動きになるので、赤い通常のボタンにする
                     .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                        Button(role: .destructive) { pendingDelete = note } label: { Label("削除", systemImage: "trash") }
+                        Button { pendingDelete = note } label: { Label("削除", systemImage: "trash") }.tint(.red)
                     }
                     // 先頭行の上の線は、タグの帯の下に重なって見えるので消す
                     .listRowSeparator(i == 0 ? .hidden : .visible, edges: .top)
@@ -464,8 +465,10 @@ struct NoteListView: View {
                     // 選んだカードは macOS 版と同じく角丸の控えめな地で示す
                     .listRowBackground(
                         RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .fill(store.selectedNoteId == note.id ? Color(.secondarySystemFill) : .clear)
+                            // 削除の確認中は、どの行が対象か分かるように赤みがかった地にする
+                            .fill(pendingDelete?.id == note.id ? Color.red.opacity(0.18) : store.selectedNoteId == note.id ? Color(.secondarySystemFill) : .clear)
                             .padding(.horizontal, 8).padding(.vertical, 2)
+                            .animation(.easeInOut(duration: 0.2), value: pendingDelete?.id)
                     )
             }
         }
@@ -500,7 +503,12 @@ struct NoteListView: View {
         }
         .toolbarBackground(.hidden, for: .navigationBar)
         .alert("このカードを削除しますか？", isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }), presenting: pendingDelete) { note in
-            Button("削除", role: .destructive) { store.deleteNote(note) }
+            // 行がすっと消えるように、アラートが閉じてから少し遅らせてアニメーションつきで消す
+            Button("削除", role: .destructive) {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                    withAnimation(.easeInOut(duration: 0.3)) { store.deleteNote(note) }
+                }
+            }
             Button("キャンセル", role: .cancel) {}
         } message: { _ in Text("ノートとそのカードが消えます。同期フォルダにも反映されます") }
         // 書き込みなどの失敗は一覧でもアラートで知らせる (読み込みの失敗は上の空の画面に出す)
