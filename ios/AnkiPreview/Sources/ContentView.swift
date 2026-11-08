@@ -4,6 +4,8 @@ struct ContentView: View {
     @EnvironmentObject var store: Store
     @State private var showSettings = false
     @State private var columns = NavigationSplitViewVisibility.all
+    /// 広い画面での一覧の表示・非表示 (自前の並びなので、切り替えボタンも自前で出す)
+    @State private var showSidebar = true
     // サイドバー列の中では幅クラスが常にコンパクトになるので、画面全体の幅クラスをここで見る
     @Environment(\.horizontalSizeClass) private var sizeClass
 
@@ -13,10 +15,24 @@ struct ContentView: View {
                 // 広い画面 (iPad・開いた Duo): 一覧とカードを並べる。システムの分割表示は一覧を角丸の浮いた板にするので、
                 // 自前で並べて、一覧は上・左・下の縁まで届くようにする
                 HStack(spacing: 0) {
-                    NavigationStack { NoteListView(showSettings: $showSettings, wide: true) }
-                        .frame(width: 340)
-                    Divider().ignoresSafeArea()
-                    NavigationStack { DetailView(showSettings: $showSettings) }
+                    if showSidebar {
+                        NavigationStack { NoteListView(showSettings: $showSettings, wide: true) }
+                            .frame(width: 340)
+                            .transition(.move(edge: .leading))
+                        Divider().ignoresSafeArea()
+                    }
+                    NavigationStack {
+                        DetailView(showSettings: $showSettings)
+                            .toolbar {
+                                // 分割表示にあった一覧の表示・非表示ボタン
+                                ToolbarItem(placement: .topBarLeading) {
+                                    Button {
+                                        withAnimation(.easeInOut(duration: 0.25)) { showSidebar.toggle() }
+                                    } label: { Image(systemName: "sidebar.left") }
+                                    .accessibilityLabel(showSidebar ? "一覧を隠す" : "一覧を表示")
+                                }
+                            }
+                    }
                 }
             } else {
                 NavigationSplitView(columnVisibility: $columns) {

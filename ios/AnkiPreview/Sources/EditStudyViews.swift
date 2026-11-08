@@ -230,7 +230,7 @@ struct StudyView: View {
                     ZStack {
                         bg.ignoresSafeArea()
                         PreviewView(html: store.studyHTML(card: card, back: showBack, dark: dark,
-                                                          topInset: geo.safeAreaInsets.top, bottomInset: geo.safeAreaInsets.bottom),
+                                                          topInset: geo.safeAreaInsets.top + 40, bottomInset: geo.safeAreaInsets.bottom),
                                     mediaDir: Store.mediaDir,
                                     highlights: [], controller: preview,
                                     onImage: { url in store.lightbox = LightboxItem(url: url) },
@@ -242,6 +242,15 @@ struct StudyView: View {
                     }
                     }
                     .overlay(alignment: .bottom) { answerBar(card) }
+                    // カウンター (プレビューの「1 / 114」と同じ見た目)。バーの中に入れると地が見えてしまうので、
+                    // カードの上に重ねる。カード側の上の余白 (HTML) をこの高さぶん足して重ならないようにする
+                    .overlay(alignment: .top) {
+                        Text("\(min(done + 1, total)) / \(total)")
+                            .font(.footnote).monospacedDigit().foregroundStyle(.secondary).fixedSize()
+                            .padding(.horizontal, 14).padding(.vertical, 8)
+                            .glassEffect(.regular, in: Capsule())
+                            .padding(.top, 4)
+                    }
                     .toolbarBackground(.hidden, for: .navigationBar)
                     .toolbarColorScheme(bg.isDark ? .dark : .light, for: .navigationBar)
                 } else {
@@ -258,15 +267,6 @@ struct StudyView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button { dismiss() } label: { Image(systemName: "xmark") } }
-                // カウンター (プレビューの「1 / 114」と同じ見た目)。ナビゲーションバーの中央に置けば、カードの中身と重ならない
-                if current != nil {
-                    ToolbarItem(placement: .principal) {
-                        Text("\(min(done + 1, total)) / \(total)")
-                            .font(.footnote).monospacedDigit().foregroundStyle(.secondary).fixedSize()
-                            .padding(.horizontal, 14).padding(.vertical, 8)
-                            .glassEffect(.regular, in: Capsule())
-                    }
-                }
 
                 if let card = current {
                     ToolbarItem(placement: .topBarTrailing) {
