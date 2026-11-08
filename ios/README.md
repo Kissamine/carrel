@@ -8,10 +8,10 @@ iPhone では「一覧 → プレビュー」の積み重ね、iPad や折りた
 ## 構成
 
 ```
-ios/AnkiPreview/
-  AnkiPreview.xcodeproj      Xcode で開く
+ios/Carrel/
+  Carrel.xcodeproj      Xcode で開く
   Sources/
-    AnkiPreviewApp.swift     入口
+    CarrelApp.swift     入口
     ContentView.swift        画面 (一覧・プレビュー・設定)
     Store.swift              状態 (取り込み・絞り込み・選択)
     CollectionDB.swift       Anki のコレクション (SQLite) を読み取り専用で読む
@@ -46,8 +46,8 @@ Apple Developer Program (有料) なら 1 年有効で、TestFlight からも配
 ## ビルド
 
 ```bash
-cd ios/AnkiPreview
-xcodebuild -project AnkiPreview.xcodeproj -scheme AnkiPreview \
+cd ios/Carrel
+xcodebuild -project Carrel.xcodeproj -scheme Carrel \
   -destination 'platform=iOS Simulator,name=iPhone 17' build
 ```
 

@@ -1,7 +1,7 @@
 import SwiftUI
 
 @main
-struct AnkiPreviewApp: App {
+struct CarrelApp: App {
     @StateObject private var store = Store()
     @Environment(\.scenePhase) private var phase
     var body: some Scene {

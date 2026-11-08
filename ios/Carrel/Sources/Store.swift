@@ -481,7 +481,7 @@ final class Store: ObservableObject {
                 if url.pathExtension == "anki2" { src = url.deletingLastPathComponent() }
                 let col = src.appendingPathComponent("collection.anki2")
                 guard Self.exists(col) else {
-                    throw NSError(domain: "AnkiPreview", code: 3, userInfo: [NSLocalizedDescriptionKey: "collection.anki2 が見つかりません"])
+                    throw NSError(domain: "Carrel", code: 3, userInfo: [NSLocalizedDescriptionKey: "collection.anki2 が見つかりません"])
                 }
                 report("カードを写しています…")
                 let tmp = dataDir.appendingPathComponent("collection.incoming")
@@ -598,7 +598,7 @@ final class Store: ObservableObject {
                 Thread.sleep(forTimeInterval: attempt < 3 ? 0.5 : 1.5)
             }
         }
-        throw lastError ?? NSError(domain: "AnkiPreview", code: 4, userInfo: [NSLocalizedDescriptionKey: "ファイルを写せません"])
+        throw lastError ?? NSError(domain: "Carrel", code: 4, userInfo: [NSLocalizedDescriptionKey: "ファイルを写せません"])
     }
 
     func load() async {

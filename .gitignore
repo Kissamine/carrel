@@ -27,9 +27,9 @@ local.properties
 electron/node_modules/
 electron/dist/
 electron/renderer/vendor/cm.bundle.js
-ios/AnkiPreview/build/
-ios/AnkiPreview/build-device/
+ios/Carrel/build/
+ios/Carrel/build-device/
 *.xcuserstate
 xcuserdata/
 macos/hs_err_pid*.log
-ios/AnkiPreview/build-sim/
+ios/Carrel/build-sim/

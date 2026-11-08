@@ -88,8 +88,8 @@ NSAllowsArbitraryLoads is enabled only so that user-created card templates refer
 
 ## 8. ビルドのアップロード (有料チーム設定後)
 ```bash
-cd ios/AnkiPreview
-xcodebuild -project AnkiPreview.xcodeproj -scheme AnkiPreview -configuration Release \
+cd ios/Carrel
+xcodebuild -project Carrel.xcodeproj -scheme Carrel -configuration Release \
   -destination 'generic/platform=iOS' -archivePath build/Carrel.xcarchive \
   -allowProvisioningUpdates archive
 xcodebuild -exportArchive -archivePath build/Carrel.xcarchive \

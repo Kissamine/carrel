@@ -12,7 +12,7 @@ final class CollectionDB {
         // 書き込みはしないが、補助ファイルを作れるよう読み書き可で開く (新規作成はしない)
         if sqlite3_open_v2(path, &db, SQLITE_OPEN_READWRITE | SQLITE_OPEN_NOMUTEX | SQLITE_OPEN_URI, nil) != SQLITE_OK {
             let msg = db.map { String(cString: sqlite3_errmsg($0)) } ?? "open に失敗"
-            throw NSError(domain: "AnkiPreview", code: 1, userInfo: [NSLocalizedDescriptionKey: msg])
+            throw NSError(domain: "Carrel", code: 1, userInfo: [NSLocalizedDescriptionKey: msg])
         }
         // Anki の表は大文字小文字を区別しない独自の並び (unicase) を使っている。
         // それを知らないと並べ替えで失敗するので、同じ名前で登録しておく
@@ -33,7 +33,7 @@ final class CollectionDB {
     func query(_ sql: String, _ row: (OpaquePointer) -> Void) throws {
         var stmt: OpaquePointer?
         guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK, let stmt else {
-            throw NSError(domain: "AnkiPreview", code: 2,
+            throw NSError(domain: "Carrel", code: 2,
                           userInfo: [NSLocalizedDescriptionKey: String(cString: sqlite3_errmsg(db))])
         }
         defer { sqlite3_finalize(stmt) }
@@ -44,7 +44,7 @@ final class CollectionDB {
     func run(_ sql: String, _ binds: [Any]) throws {
         var stmt: OpaquePointer?
         guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK, let stmt else {
-            throw NSError(domain: "AnkiPreview", code: 2, userInfo: [NSLocalizedDescriptionKey: String(cString: sqlite3_errmsg(db))])
+            throw NSError(domain: "Carrel", code: 2, userInfo: [NSLocalizedDescriptionKey: String(cString: sqlite3_errmsg(db))])
         }
         defer { sqlite3_finalize(stmt) }
         let transient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
@@ -59,14 +59,14 @@ final class CollectionDB {
             }
         }
         guard sqlite3_step(stmt) == SQLITE_DONE else {
-            throw NSError(domain: "AnkiPreview", code: 5, userInfo: [NSLocalizedDescriptionKey: String(cString: sqlite3_errmsg(db))])
+            throw NSError(domain: "Carrel", code: 5, userInfo: [NSLocalizedDescriptionKey: String(cString: sqlite3_errmsg(db))])
         }
     }
 
     /// 書き込み (iPhone 内のコピーに対してだけ使う)
     func exec(_ sql: String) throws {
         if sqlite3_exec(db, sql, nil, nil, nil) != SQLITE_OK {
-            throw NSError(domain: "AnkiPreview", code: 5, userInfo: [NSLocalizedDescriptionKey: String(cString: sqlite3_errmsg(db))])
+            throw NSError(domain: "Carrel", code: 5, userInfo: [NSLocalizedDescriptionKey: String(cString: sqlite3_errmsg(db))])
         }
     }
     private static func quote(_ s: String) -> String { "'" + s.replacingOccurrences(of: "'", with: "''") + "'" }
@@ -282,11 +282,11 @@ final class CollectionDB {
     func backup(to dest: URL) throws {
         var out: OpaquePointer?
         guard sqlite3_open_v2(dest.path, &out, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, nil) == SQLITE_OK, let out else {
-            throw NSError(domain: "AnkiPreview", code: 6, userInfo: [NSLocalizedDescriptionKey: "書き出し先を開けません"])
+            throw NSError(domain: "Carrel", code: 6, userInfo: [NSLocalizedDescriptionKey: "書き出し先を開けません"])
         }
         defer { sqlite3_close(out) }
         guard let b = sqlite3_backup_init(out, "main", db, "main") else {
-            throw NSError(domain: "AnkiPreview", code: 7, userInfo: [NSLocalizedDescriptionKey: String(cString: sqlite3_errmsg(out))])
+            throw NSError(domain: "Carrel", code: 7, userInfo: [NSLocalizedDescriptionKey: String(cString: sqlite3_errmsg(out))])
         }
         sqlite3_backup_step(b, -1)
         sqlite3_backup_finish(b)

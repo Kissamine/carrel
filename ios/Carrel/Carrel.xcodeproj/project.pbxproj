@@ -20,7 +20,7 @@
 		B1B1B1B1B1B1B1B1B1B1B101 /* Scheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1A1A1A1A1A1A1A1A1A1A101 /* Scheduler.swift */; };
 		85E6BECD9B5A4E2988A62E45 /* PreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEF00138DF344BE3961D6087 /* PreviewView.swift */; };
 		E3E3E3E3E3E3E3E3E3E3E3E3 /* CarrelLogo.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4F4F4F4F4F4F4F4F4F4F4F4 /* CarrelLogo.swift */; };
-		B4ABD1C54EAA4AAF82398AE3 /* AnkiPreviewApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4533B98926BA4F0F9296BC7E /* AnkiPreviewApp.swift */; };
+		B4ABD1C54EAA4AAF82398AE3 /* CarrelApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4533B98926BA4F0F9296BC7E /* CarrelApp.swift */; };
 		DC5D6149B3CA4C2B910B5612 /* TemplateRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 634417D0D49D44E6B932749B /* TemplateRenderer.swift */; };
 		E1533307B3B24D8DB654F0FD /* Protobuf.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68485015D6D5471997614638 /* Protobuf.swift */; };
 		F9F82686C8784DC7B1714977 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 614B9E279DBE4943AC977180 /* Assets.xcassets */; };
@@ -29,12 +29,12 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		4533B98926BA4F0F9296BC7E /* AnkiPreviewApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnkiPreviewApp.swift; sourceTree = "<group>"; };
+		4533B98926BA4F0F9296BC7E /* CarrelApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarrelApp.swift; sourceTree = "<group>"; };
 		614B9E279DBE4943AC977180 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		D2D2D2D2D2D2D2D2D2D2D2D2 /* Carrel.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = Carrel.icon; sourceTree = "<group>"; };
 		634417D0D49D44E6B932749B /* TemplateRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TemplateRenderer.swift; sourceTree = "<group>"; };
 		68485015D6D5471997614638 /* Protobuf.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Protobuf.swift; sourceTree = "<group>"; };
-		76A6A1ECF8364BC1A58E8280 /* AnkiPreview.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AnkiPreview.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		76A6A1ECF8364BC1A58E8280 /* Carrel.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Carrel.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		ABB866C9B5C74E83B59D6CE6 /* CollectionDB.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CollectionDB.swift; sourceTree = "<group>"; };
 		AF6794E44BE041CC98904916 /* Store.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Store.swift; sourceTree = "<group>"; };
 		A1A1A1A1A1A1A1A1A1A1A108 /* CodeEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeEditor.swift; sourceTree = "<group>"; };
@@ -65,7 +65,7 @@
 		2FF0F07A9D734BED8FEF2E62 /* Sources */ = {
 			isa = PBXGroup;
 			children = (
-				4533B98926BA4F0F9296BC7E /* AnkiPreviewApp.swift */,
+				4533B98926BA4F0F9296BC7E /* CarrelApp.swift */,
 				ABB866C9B5C74E83B59D6CE6 /* CollectionDB.swift */,
 				B593FFFBACDA4D21B99D5E4B /* ContentView.swift */,
 				AF7AF99FA07D42FFAFDE12D9 /* Models.swift */,
@@ -99,7 +99,7 @@
 		7393CA08E1234700A1D5E014 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				76A6A1ECF8364BC1A58E8280 /* AnkiPreview.app */,
+				76A6A1ECF8364BC1A58E8280 /* Carrel.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -107,9 +107,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		DC6278765E70456DB9EA31E6 /* AnkiPreview */ = {
+		DC6278765E70456DB9EA31E6 /* Carrel */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 864D331299F14F0FAC99E6CB /* Build configuration list for PBXNativeTarget "AnkiPreview" */;
+			buildConfigurationList = 864D331299F14F0FAC99E6CB /* Build configuration list for PBXNativeTarget "Carrel" */;
 			buildPhases = (
 				159E4E56EEBC41B89AC3C330 /* Sources */,
 				8F2628CD9499462CAE4695AD /* Frameworks */,
@@ -119,9 +119,9 @@
 			);
 			dependencies = (
 			);
-			name = AnkiPreview;
-			productName = AnkiPreview;
-			productReference = 76A6A1ECF8364BC1A58E8280 /* AnkiPreview.app */;
+			name = Carrel;
+			productName = Carrel;
+			productReference = 76A6A1ECF8364BC1A58E8280 /* Carrel.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -139,7 +139,7 @@
 					};
 				};
 			};
-			buildConfigurationList = FBF60C4F52C14A68B24F043A /* Build configuration list for PBXProject "AnkiPreview" */;
+			buildConfigurationList = FBF60C4F52C14A68B24F043A /* Build configuration list for PBXProject "Carrel" */;
 			compatibilityVersion = "Xcode 14.0";
 			developmentRegion = ja;
 			hasScannedForEncodings = 0;
@@ -153,7 +153,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				DC6278765E70456DB9EA31E6 /* AnkiPreview */,
+				DC6278765E70456DB9EA31E6 /* Carrel */,
 			);
 		};
 /* End PBXProject section */
@@ -179,7 +179,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				B4ABD1C54EAA4AAF82398AE3 /* AnkiPreviewApp.swift in Sources */,
+				B4ABD1C54EAA4AAF82398AE3 /* CarrelApp.swift in Sources */,
 				17AD417793584692A10E1032 /* CollectionDB.swift in Sources */,
 				0AF4F64A6F3F447A90AD31F8 /* ContentView.swift in Sources */,
 				FEAE65CCCD354C98977892ED /* Models.swift in Sources */,
@@ -313,7 +313,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		864D331299F14F0FAC99E6CB /* Build configuration list for PBXNativeTarget "AnkiPreview" */ = {
+		864D331299F14F0FAC99E6CB /* Build configuration list for PBXNativeTarget "Carrel" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				C4B9D093D2C44BBA9BDD80A2 /* Debug */,
@@ -322,7 +322,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		FBF60C4F52C14A68B24F043A /* Build configuration list for PBXProject "AnkiPreview" */ = {
+		FBF60C4F52C14A68B24F043A /* Build configuration list for PBXProject "Carrel" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				41F6E52927724CCCA4FDF6A1 /* Debug */,
