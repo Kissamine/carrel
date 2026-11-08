@@ -458,7 +458,7 @@ struct NoteListView: View {
             Divider()
             Picker("並び", selection: $store.sortMode) {
                 Label("名前", systemImage: "textformat").tag("name")
-                Label("関連度 (検索中)", systemImage: "sparkle.magnifyingglass").tag("relevance")
+                Label("関連度", systemImage: "sparkle.magnifyingglass").tag("relevance")
                 Label("更新が新しい順", systemImage: "clock").tag("modified")
                 Label("作成が新しい順", systemImage: "plus.circle").tag("created")
                 Label("期限が近い順", systemImage: "calendar").tag("due")
