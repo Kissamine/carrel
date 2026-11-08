@@ -226,24 +226,21 @@ struct StudyView: View {
                     // カードは画面いっぱい (上下の余白なし)。カウンターとボタンはその上に重ねる (地は透明) ので、
                     // Liquid Glass が中身を透かす。中身がボタンに隠れないぶんは HTML 側の余白でとる
                     // 地はフェードの外に置く (切り替えの一瞬、下の画面が透けないように)
+                    GeometryReader { geo in
                     ZStack {
                         bg.ignoresSafeArea()
-                        PreviewView(html: store.studyHTML(card: card, back: showBack, dark: dark), mediaDir: Store.mediaDir,
+                        PreviewView(html: store.studyHTML(card: card, back: showBack, dark: dark,
+                                                          topInset: geo.safeAreaInsets.top, bottomInset: geo.safeAreaInsets.bottom),
+                                    mediaDir: Store.mediaDir,
                                     highlights: [], controller: preview,
-                                    onImage: { url in store.lightbox = LightboxItem(url: url) })
+                                    onImage: { url in store.lightbox = LightboxItem(url: url) },
+                                    fixedInsets: true)
                             .ignoresSafeArea()
                             .id(card.id)                 // カードが変わったら作り直して、フェードで切り替える
                             .transition(.opacity)
                     }
-                    .overlay(alignment: .bottom) { answerBar(card) }
-                    // カウンター (プレビューの「1 / 114」と同じ見た目)。スクロールしても動かないよう、カードの上に重ねて固定
-                    .overlay(alignment: .top) {
-                        Text("\(min(done + 1, total)) / \(total)")
-                            .font(.footnote).monospacedDigit().foregroundStyle(.secondary).fixedSize()
-                            .padding(.horizontal, 14).padding(.vertical, 8)
-                            .glassEffect(.regular, in: Capsule())
-                            .padding(.top, 4)
                     }
+                    .overlay(alignment: .bottom) { answerBar(card) }
                     .toolbarBackground(.hidden, for: .navigationBar)
                     .toolbarColorScheme(bg.isDark ? .dark : .light, for: .navigationBar)
                 } else {
@@ -260,6 +257,15 @@ struct StudyView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button { dismiss() } label: { Image(systemName: "xmark") } }
+                // カウンター (プレビューの「1 / 114」と同じ見た目)。ナビゲーションバーの中央に置けば、カードの中身と重ならない
+                if current != nil {
+                    ToolbarItem(placement: .principal) {
+                        Text("\(min(done + 1, total)) / \(total)")
+                            .font(.footnote).monospacedDigit().foregroundStyle(.secondary).fixedSize()
+                            .padding(.horizontal, 14).padding(.vertical, 8)
+                            .glassEffect(.regular, in: Capsule())
+                    }
+                }
 
                 if let card = current {
                     ToolbarItem(placement: .topBarTrailing) {

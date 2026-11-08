@@ -34,6 +34,8 @@ struct PreviewView: UIViewRepresentable {
     let highlights: [String]
     var controller: PreviewController
     var onImage: (URL) -> Void = { _ in }
+    /// true なら安全領域ぶんの自動の余白を付けない (学習モードのように画面いっぱいに出し、余白は HTML 側でとるとき)
+    var fixedInsets = false
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
@@ -45,6 +47,7 @@ struct PreviewView: UIViewRepresentable {
         view.isOpaque = false
         view.backgroundColor = .clear
         view.scrollView.backgroundColor = .clear
+        if fixedInsets { view.scrollView.contentInsetAdjustmentBehavior = .never }
         view.navigationDelegate = context.coordinator
         controller.webView = view
         return view
@@ -53,6 +56,10 @@ struct PreviewView: UIViewRepresentable {
     func updateUIView(_ view: WKWebView, context: Context) {
         context.coordinator.parent = self
         controller.webView = view
+        if fixedInsets, view.scrollView.contentInsetAdjustmentBehavior != .never {
+            view.scrollView.contentInsetAdjustmentBehavior = .never
+            view.scrollView.contentInset = .zero
+        }
         if context.coordinator.lastHTML != html {
             context.coordinator.lastHTML = html
             context.coordinator.pendingHighlights = highlights

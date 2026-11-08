@@ -8,12 +8,25 @@ struct ContentView: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
 
     var body: some View {
-        NavigationSplitView(columnVisibility: $columns) {
-            NoteListView(showSettings: $showSettings, wide: sizeClass == .regular)
-        } detail: {
-            DetailView(showSettings: $showSettings)
+        Group {
+            if sizeClass == .regular {
+                // 広い画面 (iPad・開いた Duo): 一覧とカードを並べる。システムの分割表示は一覧を角丸の浮いた板にするので、
+                // 自前で並べて、一覧は上・左・下の縁まで届くようにする
+                HStack(spacing: 0) {
+                    NavigationStack { NoteListView(showSettings: $showSettings, wide: true) }
+                        .frame(width: 340)
+                    Divider().ignoresSafeArea()
+                    NavigationStack { DetailView(showSettings: $showSettings) }
+                }
+            } else {
+                NavigationSplitView(columnVisibility: $columns) {
+                    NoteListView(showSettings: $showSettings, wide: false)
+                } detail: {
+                    DetailView(showSettings: $showSettings)
+                }
+                .navigationSplitViewStyle(.balanced)
+            }
         }
-        .navigationSplitViewStyle(.balanced)
         .sheet(isPresented: $showSettings) { SettingsView().environmentObject(store) }
         .sheet(item: $store.editing) { target in NoteEditorView(note: target.note).environmentObject(store) }
         .sheet(isPresented: $store.studySetup) { StudySetupView().environmentObject(store) }
@@ -454,6 +467,8 @@ struct NoteListView: View {
         List(selection: $store.selectedNoteId) {
             ForEach(Array(store.filtered.enumerated()), id: \.element.id) { i, note in
                 NoteRow(note: note, query: store.query).tag(note.id)
+                    .contentShape(Rectangle())
+                    .onTapGesture { store.selectedNoteId = note.id }
                     // 左にスワイプで削除 (確認してから)。role を destructive にすると確認前に行が消える動きが入って
                     // アラートと同時に戻る不自然な動きになるので、赤い通常のボタンにする
                     .swipeActions(edge: .trailing, allowsFullSwipe: false) {

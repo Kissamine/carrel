@@ -429,11 +429,11 @@ final class Store: ObservableObject {
     }
 
     /// 学習用の HTML (表か裏)
-    func studyHTML(card: CardInfo, back: Bool, dark: Bool) -> String {
+    func studyHTML(card: CardInfo, back: Bool, dark: Bool, topInset: CGFloat = 0, bottomInset: CGFloat = 0) -> String {
         guard let note = notes.first(where: { $0.id == card.noteId }), let nt = notetypes[note.notetypeId] else { return "" }
         let r = TemplateRenderer.render(note: note, notetype: nt, templateIndex: min(card.ord, max(0, nt.templates.count - 1)))
-        // 画面いっぱいに出すので、上はカウンター、下はボタンに隠れないぶんの余白を中身側でとる
-        let css = nt.css + "\nhtml, body { padding-top: 20px !important; padding-bottom: 60px !important; }"
+        // 画面いっぱいに出すので、上はバー、下はボタンに隠れないぶんの余白を中身側でとる (端末ごとの安全領域を足す)
+        let css = nt.css + "\nbody { padding-top: \(Int(topInset) + 16)px !important; padding-bottom: \(Int(bottomInset) + 70)px !important; }"
         return TemplateRenderer.page(body: back ? (r.back.isEmpty ? r.front : r.back) : r.front, css: css, textZoom: textZoom, dark: dark, hasNightCSS: nt.hasNightCSS)
     }
 
