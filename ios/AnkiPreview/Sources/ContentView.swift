@@ -109,8 +109,9 @@ struct DetailView: View {
                 }
             }
             .sheet(isPresented: $showInfo) { CardInfoView(note: note).environmentObject(store) }
-            .confirmationDialog("このカードを削除しますか？", isPresented: $confirmDelete, titleVisibility: .visible) {
+            .alert("このカードを削除しますか？", isPresented: $confirmDelete) {
                 Button("削除", role: .destructive) { store.deleteNote(note) }
+                Button("キャンセル", role: .cancel) {}
             } message: { Text("ノートとそのカードが消えます。同期フォルダにも反映されます") }
         } else if !store.hasCollection {
             ContentUnavailableView {
@@ -498,7 +499,7 @@ struct NoteListView: View {
             }
         }
         .toolbarBackground(.hidden, for: .navigationBar)
-        .confirmationDialog("このカードを削除しますか？", isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }), titleVisibility: .visible) {
+        .alert("このカードを削除しますか？", isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } })) {
             Button("削除", role: .destructive) { if let n = pendingDelete { store.deleteNote(n) }; pendingDelete = nil }
             Button("キャンセル", role: .cancel) { pendingDelete = nil }
         } message: { Text("ノートとそのカードが消えます。同期フォルダにも反映されます") }
