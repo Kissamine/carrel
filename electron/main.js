@@ -220,9 +220,23 @@ protocol.registerSchemesAsPrivileged([
 app.whenReady().then(async () => {
   // カードの中の画像・音声は media:// で読む。
   // プレビューは別のパーティションで動くので、そちらにも登録する
-  const serveMedia = (request) => {
+  // 画像は長くキャッシュさせる (プレビューの本文を差し替えるたびに 10 MB 分の画像を読み直して
+  // 復号していると、打鍵のたびに重くなり、メモリも膨らんでプレビューが落ちる)。
+  // 同じ名前で中身が変わったときのために、更新時刻と大きさを ETag にする
+  const serveMedia = async (request) => {
     const name = decodeURIComponent(new URL(request.url).pathname.replace(/^\//, ''));
-    return net.fetch('file://' + path.join(mediaDir || '', name));
+    const file = path.join(mediaDir || '', name);
+    let etag = '';
+    try { const st = fs.statSync(file); etag = `"${st.size}-${Math.floor(st.mtimeMs)}"`; } catch { /* 無ければそのまま */ }
+    if (etag && request.headers.get('if-none-match') === etag) {
+      return new Response(null, { status: 304, headers: { 'ETag': etag, 'Cache-Control': 'public, max-age=31536000' } });
+    }
+    const res = await net.fetch('file://' + file);
+    if (!res.ok) return res;
+    const headers = new Headers(res.headers);
+    headers.set('Cache-Control', 'public, max-age=31536000');
+    if (etag) headers.set('ETag', etag);
+    return new Response(res.body, { status: res.status, headers });
   };
   protocol.handle('media', serveMedia);
 

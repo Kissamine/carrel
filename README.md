@@ -25,16 +25,8 @@ Carrel.app を Applications に入れてください。Apple Silicon (M1 以降)
 
 ### 初回起動
 
-現在は Apple の署名・公証を行っていないため、初回に「開発元を確認できません」と出ます。
-次のどちらかで開けます。
-
-- Finder で Carrel.app を **右クリック › 開く** を選び、ダイアログで「開く」を押す
-- またはターミナルで隔離属性を外す:
-  ```bash
-  xattr -d com.apple.quarantine /Applications/Carrel.app
-  ```
-
-2 回目以降は普通に開けます。
+1.0.4 から Apple の Developer ID で署名・公証しているため、ダウンロードした Carrel.app はそのまま開けます。
+(1.0.3 以前は無署名だったので「開発元を確認できません」と出ていました。その場合は右クリック › 開く で開けます。)
 
 ## 使い方
 

@@ -1,6 +1,6 @@
 {
   "name": "carrel",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Carrel — Anki 互換のカード編集アプリ (macOS)",
   "main": "main.js",
   "scripts": {
@@ -83,7 +83,8 @@
           "type": "link",
           "path": "/Applications"
         }
-      ]
+      ],
+      "sign": true
     },
     "copyright": "Copyright © 2026 Kujo Haru",
     "afterPack": "build/afterPack.js"
