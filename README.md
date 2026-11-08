@@ -2,7 +2,7 @@
 
 <img src="electron/build/icon.png" width="96" alt="Carrel">
 
-**Carrel** は、デスクトップ版 [Anki](https://apps.ankiweb.net/) のカードを編集するための補助アプリ (macOS) です。
+**Carrel for macOS** は、デスクトップ版 [Anki](https://apps.ankiweb.net/) のカードを編集するための補助アプリ (macOS) です。
 カードの検索・編集・プレビューに特化していて、Anki が終了している間に Anki のコレクションを直接開いて編集します。
 Anki を置き換えるものではなく、Anki と組み合わせて使う「書きやすい机」です。
 
