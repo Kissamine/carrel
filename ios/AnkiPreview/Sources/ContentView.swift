@@ -23,13 +23,11 @@ struct ContentView: View {
                     }
                     NavigationStack {
                         DetailView(showSettings: $showSettings)
+                            // 一覧の表示・非表示。カード側のバーの項目にしておくと、Duo ではシステムが右端の帯に並べる
                             .toolbar {
-                                // 一覧を隠しているときだけ、カード側の左上に「一覧を表示」を出す
-                                if !showSidebar {
-                                    ToolbarItem(placement: .topBarLeading) {
-                                        Button { withAnimation(.easeInOut(duration: 0.25)) { showSidebar = true } } label: { Image(systemName: "sidebar.left") }
-                                            .accessibilityLabel("一覧を表示")
-                                    }
+                                ToolbarItem(placement: .topBarLeading) {
+                                    Button { withAnimation(.easeInOut(duration: 0.25)) { showSidebar.toggle() } } label: { Image(systemName: "sidebar.left") }
+                                        .accessibilityLabel(showSidebar ? "一覧を隠す" : "一覧を表示")
                                 }
                             }
                     }
@@ -553,20 +551,13 @@ struct NoteListView: View {
         .navigationTitle("")   // 題はロゴ (左端) で出すので、文字の題は空に
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .topBarLeading) { CarrelLogoView(height: 20).padding(.leading, 4) }
+            ToolbarItem(placement: .topBarLeading) { CarrelLogoView(height: 20).padding(.leading, 4).padding(.top, 6) }
                 .sharedBackgroundVisibility(.hidden)   // ロゴはボタン (ガラスの地) に見せない
             if !wide {
                 ToolbarItem(placement: .topBarTrailing) { optionsMenu }
             }
             if wide {
                 ToolbarItem(placement: .bottomBar) { optionsMenu }
-                // 一覧を隠すボタン (分割表示にあったもの)。隠したあとはカード側の左上に出る
-                if let sidebar {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Button { withAnimation(.easeInOut(duration: 0.25)) { sidebar.wrappedValue = false } } label: { Image(systemName: "sidebar.left") }
-                            .accessibilityLabel("一覧を隠す")
-                    }
-                }
             }
             // 学習 (期限の来たカード + 未学習)
             ToolbarItem(placement: .bottomBar) {
