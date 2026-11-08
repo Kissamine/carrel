@@ -2,10 +2,11 @@
 
 ## 0. 前提
 - Apple Silicon の Mac、Node.js、Python 3
-- `macos/.venv` を作っておく (Git 管理外):
+- 同梱する Python を用意しておく (Git 管理外。単体で動く python-build-standalone + anki ライブラリ):
   ```bash
-  cd macos && python3 -m venv .venv && .venv/bin/pip install anki
+  sh macos/setup-pyruntime.sh
   ```
+  開発用に `macos/.venv` を別に作ってもよいが、配布物に入るのは `macos/pyruntime` だけ。
 - `cd electron && npm install`
 
 ## 1. 無署名で配る (現在の方式・無料)
@@ -18,21 +19,16 @@ README の「初回起動」の手順 (右クリック › 開く、または `x
 
 バージョンを上げるときは `electron/package.json` の `version` を変え、`git tag v1.x.y` を打つ。
 
-## 2. 署名・公証つきに切り替える (Apple Developer Program 加入後)
-準備は済んでいる。やることは次の 3 つだけ。
-
-1. Xcode › Settings › Accounts で **Developer ID Application** 証明書を作る (キーチェーンに入る)
-2. App Store Connect で App 用パスワード (app-specific password) を発行する
-3. 環境変数を入れて署名つきビルドを実行する
-   ```bash
-   export APPLE_ID="you@example.com"
-   export APPLE_APP_SPECIFIC_PASSWORD="xxxx-xxxx-xxxx-xxxx"
-   export APPLE_TEAM_ID="XXXXXXXXXX"      # Developer ID 証明書のチーム ID
-   cd electron && npm run dist:signed
-   ```
-   `dist:signed` は証明書の自動検出を有効にし (`CSC_IDENTITY_AUTO_DISCOVERY` を外す)、
-   `mac.notarize` を有効にして Apple の公証サーバに提出する。
-   Hardened Runtime と entitlements (`build/entitlements.mac.plist`) は `package.json` に設定済み。
+## 2. 署名・公証つき (現在の方式)
+- Developer ID Application 証明書はキーチェーンに入っている (チーム 3ZRH7F9828)。別の Mac で作業するときは
+  キーチェーンアクセスから .p12 で書き出して持っていく
+- 公証の資格情報はキーチェーンのプロファイル `carrel-notary` に入れてある (`xcrun notarytool store-credentials carrel-notary --apple-id … --team-id 3ZRH7F9828`)
+- ビルド:
+  ```bash
+  cd electron && APPLE_KEYCHAIN_PROFILE=carrel-notary npm run dist:signed
+  ```
+  `build/afterPack.js` が同梱 Python の実行ファイル・共有ライブラリにも署名してから、electron-builder がアプリ本体に署名し、
+  公証サーバへ提出してステープルする。Hardened Runtime と entitlements (`build/entitlements.mac.plist`) は `package.json` に設定済み。
 
 確認:
 ```bash

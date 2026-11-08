@@ -24,7 +24,7 @@
         "to": "bridge"
       },
       {
-        "from": "../macos/.venv",
+        "from": "../macos/pyruntime",
         "to": "python"
       },
       {
@@ -85,7 +85,8 @@
         }
       ]
     },
-    "copyright": "Copyright © 2026 Kujo Haru"
+    "copyright": "Copyright © 2026 Kujo Haru",
+    "afterPack": "build/afterPack.js"
   },
   "devDependencies": {
     "electron": "^44.0.0",
