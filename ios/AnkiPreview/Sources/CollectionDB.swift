@@ -250,8 +250,8 @@ final class CollectionDB {
     func deleteNote(id: Int64) throws {
         var cids: [Int64] = []
         try query("select id from cards where nid = \(id)") { s in cids.append(sqlite3_column_int64(s, 0)) }
-        for cid in cids { try exec("insert into graves (usn, oid, type) values (-1, \(cid), 0)") }
-        try exec("insert into graves (usn, oid, type) values (-1, \(id), 1)")
+        for cid in cids { try exec("insert or replace into graves (usn, oid, type) values (-1, \(cid), 0)") }
+        try exec("insert or replace into graves (usn, oid, type) values (-1, \(id), 1)")
         try exec("delete from cards where nid = \(id)")
         try exec("delete from notes where id = \(id)")
     }
@@ -270,6 +270,7 @@ final class CollectionDB {
         try exec("insert or ignore into templates (ntid, ord, name, mtime_secs, usn, config) select ntid, ord, name, mtime_secs, -1, config from s.templates where ntid in (\(mids))")
         var before = 0, after = 0
         try query("select count(*) from notes") { st in before = Int(sqlite3_column_int(st, 0)) }
+        try exec("delete from graves where (type = 1 and oid in (select id from s.notes)) or (type = 0 and oid in (select id from s.cards))")
         try exec("insert or ignore into notes (id, guid, mid, mod, usn, tags, flds, sfld, csum, flags, data) select id, guid, mid, \(Self.now()), -1, tags, flds, sfld, csum, flags, data from s.notes")
         // カードのデッキは、同名のデッキがすでにあるならそちらへ
         try exec("insert or ignore into cards (id, nid, did, ord, mod, usn, type, queue, due, ivl, factor, reps, lapses, left, odue, odid, flags, data) select c.id, c.nid, coalesce((select d2.id from decks d2 join s.decks d1 on d1.name = d2.name where d1.id = c.did), c.did), c.ord, \(Self.now()), -1, c.type, c.queue, c.due, c.ivl, c.factor, c.reps, c.lapses, c.left, c.odue, c.odid, c.flags, c.data from s.cards c where c.nid in (select id from s.notes)")

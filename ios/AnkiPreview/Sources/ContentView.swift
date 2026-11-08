@@ -503,6 +503,10 @@ struct NoteListView: View {
             Button("削除", role: .destructive) { store.deleteNote(note) }
             Button("キャンセル", role: .cancel) {}
         } message: { _ in Text("ノートとそのカードが消えます。同期フォルダにも反映されます") }
+        // 書き込みなどの失敗は一覧でもアラートで知らせる (読み込みの失敗は上の空の画面に出す)
+        .alert(store.error ?? "", isPresented: Binding(get: { store.error != nil && !store.notes.isEmpty }, set: { if !$0 { store.error = nil } })) {
+            Button("OK", role: .cancel) {}
+        }
         .modifier(CompactSearch(enabled: !wide, text: $store.keyword))
         .autocorrectionDisabled()
         .navigationTitle("")   // 題はロゴ (左端) で出すので、文字の題は空に
