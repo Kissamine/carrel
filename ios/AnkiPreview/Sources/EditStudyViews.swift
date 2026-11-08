@@ -69,8 +69,6 @@ struct NoteEditorView: View {
                         } header: { Text(name) } footer: {
                             if mode == "text", i < original.count, Self.hasRichHTML(original[i]) {
                                 Text("この欄には書式や画像が含まれます。テキストモードで書き換えると書式は失われます (HTML モードならそのまま直せます)")
-                            } else if mode == "text", i == 0 {
-                                Text(verbatim: "Markdown が使えます: **太字** *斜体* `コード` # 見出し - 箇条書き [文字](URL)")
                             }
                         }
                     }
@@ -581,6 +579,7 @@ struct GuideView: View {
                 Section("Carrel でできること") {
                     guide("カードを見る", "一覧からカードを選ぶと右 (または次の画面) に表示されます。右上の「表 / 裏」で面を切り替え、下の矢印で前後のカードへ移れます。")
                     guide("カードを作る・直す", "一覧右上のメニューの「新しいカード」で作れます。表示中のカードは右上メニューの「編集」で本文とタグを、「カード情報」でデッキとタグを変えられます。")
+                    guide("書式をつける (Markdown)", "編集画面のテキストモードでは Markdown の基本記法が使えます。**太字**、*斜体*、`コード`、~~取り消し~~、# 見出し (# の数で大きさ)、- 箇条書き、1. 番号付き、[文字](URL) のリンク。保存時に HTML に変換され、開き直すと同じ記法で表示されます。細かな書式は HTML モードで直接直せます。")
                     guide("学習する", "一覧の下にある「学習」を押すと条件の画面が開き、デッキ・タグ・検索語・新規の枚数などを選べます。よく使う条件は名前を付けて学習デッキとして保存できます。学習中は「あとで」(列の最後へ) と「スキップ」(今回は出さない) も使えます。答えを見てから「もう一度 / 難しい / 普通 / 簡単」で評価すると、Anki と同じ考え方で次の出題日が決まります。")
                 }
                 Section("検索のコツ") {
@@ -610,7 +609,7 @@ struct GuideView: View {
     private func guide(_ title: String, _ body: String) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(title).font(.subheadline.weight(.semibold))
-            Text(body).font(.footnote).foregroundStyle(.secondary)
+            Text(verbatim: body).font(.footnote).foregroundStyle(.secondary)
         }
         .padding(.vertical, 2)
     }
