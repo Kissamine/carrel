@@ -154,6 +154,37 @@ extension CollectionDB {
         }
     }
 
+    /// 既存のノートタイプを写して新しく作る (欄・カードタイプ・CSS はそのまま)。新しい id を返す
+    func cloneNotetype(from src: Int64, name: String) throws -> Int64 {
+        let id = Int64(Date().timeIntervalSince1970 * 1000)
+        let now = Int64(Date().timeIntervalSince1970)
+        try exec("begin")
+        do {
+            try run("insert into notetypes (id, name, mtime_secs, usn, config) select ?, ?, ?, -1, config from notetypes where id = ?", [id, name, now, src])
+            try run("insert into fields (ntid, ord, name, config) select ?, ord, name, config from fields where ntid = ?", [id, src])
+            try run("insert into templates (ntid, ord, name, mtime_secs, usn, config) select ?, ord, name, ?, -1, config from templates where ntid = ?", [id, now, src])
+            try exec("update col set scm = \(Int64(Date().timeIntervalSince1970 * 1000))")
+            try exec("commit")
+        } catch { try? exec("rollback"); throw error }
+        return id
+    }
+
+    /// 使われていないノートタイプを消す。使っているノートがあれば消さずに枚数を返す
+    func deleteNotetype(id: Int64) throws -> Int {
+        var inUse = 0
+        try query("select count(*) from notes where mid = \(id)") { s in inUse = Int(sqlite3_column_int(s, 0)) }
+        if inUse > 0 { return inUse }
+        try exec("begin")
+        do {
+            try exec("delete from templates where ntid = \(id)")
+            try exec("delete from fields where ntid = \(id)")
+            try exec("delete from notetypes where id = \(id)")
+            try exec("update col set scm = \(Int64(Date().timeIntervalSince1970 * 1000))")
+            try exec("commit")
+        } catch { try? exec("rollback"); throw error }
+        return 0
+    }
+
     /// ノートを別のノートタイプに移す。fields は新しい並びの本文。カードはカードタイプの数に合わせる
     func changeNotetype(noteId: Int64, to mid: Int64, fields: [String], tags: [String], templateCount: Int) throws {
         let now = Int64(Date().timeIntervalSince1970)

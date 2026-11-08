@@ -21,6 +21,7 @@ import traceback
 from typing import Any
 
 from anki.collection import Collection
+from anki.utils import to_json_bytes
 from anki.sync import SyncAuth
 
 
@@ -138,10 +139,20 @@ class Bridge:
         return out
 
     def _changed_notetypes(self, m: sqlite3.Connection) -> list:
-        """iPhone 側で更新されたノートタイプ (mtime がこちらより新しいもの) の id"""
+        """iPhone 側で更新された (mtime がこちらより新しい) か、こちらにないノートタイプの id"""
         col = self._col()
         mine = {r[0]: r[1] for r in col.db.all("select id, mtime_secs from notetypes")}
-        return [r[0] for r in m.execute("select id, mtime_secs from notetypes") if r[0] in mine and r[1] > mine[r[0]]]
+        return [r[0] for r in m.execute("select id, mtime_secs from notetypes") if r[0] not in mine or r[1] > mine[r[0]]]
+
+    def _removed_notetypes(self, m: sqlite3.Connection) -> list:
+        """iPhone 側で消されたノートタイプ (こちらにあって向こうにない)。カードが使っているものは残す"""
+        col = self._col()
+        theirs = {r[0] for r in m.execute("select id from notetypes")}
+        out = []
+        for (ntid,) in col.db.all("select id from notetypes"):
+            if ntid not in theirs and not col.db.scalar("select 1 from notes where mid = ? limit 1", ntid):
+                out.append(ntid)
+        return out
 
     def _pull_notetypes(self, m: sqlite3.Connection, ids: list) -> int:
         """iPhone 側のノートタイプ (名前・欄・テンプレート・CSS) を Anki のコレクションへ反映する。
@@ -150,12 +161,27 @@ class Bridge:
         col = self._col()
         done = 0
         for ntid in ids:
-            nt = col.models.get(ntid)
-            if not nt:
-                continue
             name, cfg = m.execute("select name, config from notetypes where id = ?", (ntid,)).fetchone()
             their_fields = [r[0] for r in m.execute("select name from fields where ntid = ? order by ord", (ntid,))]
             their_tmpls = {r[0]: (r[1], r[2]) for r in m.execute("select ord, name, config from templates where ntid = ?", (ntid,))}
+            nt = col.models.get(ntid)
+            if not nt:
+                # iPhone 側で新しく作られたノートタイプ。同じ id で作る (ノートの mid がそのまま使えるように)
+                nt = col.models.new(name)
+                nt["id"] = ntid
+                for fname in their_fields:
+                    nt["flds"].append(col.models.new_field(fname))
+                for ord_ in sorted(their_tmpls):
+                    tname, tcfg = their_tmpls[ord_]
+                    strs = self._proto_strings(tcfg)
+                    t = col.models.new_template(tname)
+                    t["qfmt"] = strs.get(1, "")
+                    t["afmt"] = strs.get(2, "")
+                    nt["tmpls"].append(t)
+                nt["css"] = self._proto_strings(cfg).get(3, nt["css"])
+                col._backend.add_or_update_notetype(json=to_json_bytes(nt), preserve_usn_and_mtime=False, skip_checks=False)
+                done += 1
+                continue
             # 欄: 同じ名前の欄はそのまま (ord を保つので Anki が本文を正しく並べ替える)、新しい名前は足す
             by_name = {f["name"]: f for f in nt["flds"]}
             flds = []
@@ -258,6 +284,9 @@ class Bridge:
         m = self._mirror_db(dest)
         # 0) ノートタイプの変更 (欄・テンプレート・CSS) を先に反映する。ノートの本文はそのあとで写す
         notetypes = self._pull_notetypes(m, self._changed_notetypes(m))
+        for ntid in self._removed_notetypes(m):
+            col.models.remove(ntid)
+            notetypes += 1
         try:
             theirs = {r[0]: r for r in m.execute(
                 "select id, guid, mid, mod, usn, tags, flds, sfld, csum, flags, data from notes")}

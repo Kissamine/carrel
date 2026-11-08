@@ -360,6 +360,28 @@ final class Store: ObservableObject {
         await load()
     }
 
+    /// 既存のノートタイプをもとに新しいノートタイプを作る。作った id を返す
+    func addNotetype(basedOn src: Int64) async -> Int64? {
+        let names = Set(notetypes.values.map { $0.name })
+        var name = "新しいノートタイプ"; var n = 2
+        while names.contains(name) { name = "新しいノートタイプ \(n)"; n += 1 }
+        var id: Int64? = nil
+        guard write({ db in id = try db.cloneNotetype(from: src, name: name) }) else { return nil }
+        await load()
+        return id
+    }
+
+    /// 使っているカードの枚数 (消せるかの判断に)
+    func notetypeUsage(_ id: Int64) -> Int { notes.reduce(0) { $0 + ($1.notetypeId == id ? 1 : 0) } }
+
+    /// 使われていないノートタイプを消す
+    func deleteNotetype(_ id: Int64) async {
+        var inUse = 0
+        guard write({ db in inUse = try db.deleteNotetype(id: id) }) else { return }
+        if inUse > 0 { error = "このノートタイプは \(inUse) 枚のカードが使っているので消せません"; return }
+        await load()
+    }
+
     /// ノートを別のノートタイプへ (本文は新しい並びで渡す)
     func changeNotetype(_ note: Note, to mid: Int64, fields: [String], tags: [String]) async {
         guard let nt = notetypes[mid] else { return }

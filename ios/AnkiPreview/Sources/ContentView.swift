@@ -757,6 +757,9 @@ struct SettingsView: View {
     @State private var picking = false
     @State private var confirmUnlink = false
     @State private var showFolderHelp = false
+    /// ノートタイプの削除の確認・追加後に開く編集画面
+    @State private var pendingNotetypeDelete: Notetype? = nil
+    @State private var openNotetype: Int64? = nil
 
     var body: some View {
         NavigationStack {
@@ -820,19 +823,33 @@ struct SettingsView: View {
                     }
                 }
                 Section {
-                    ForEach(store.notetypes.values.sorted { $0.name < $1.name }) { nt in
+                    let sorted = store.notetypes.values.sorted { $0.name < $1.name }
+                    ForEach(sorted) { nt in
                         NavigationLink {
                             NotetypeEditorView(notetypeId: nt.id).environmentObject(store)
                         } label: {
                             HStack {
                                 Text(nt.name)
                                 Spacer()
-                                Text("\(nt.fieldNames.count) 欄").font(.footnote).foregroundStyle(.secondary)
+                                let used = store.notetypeUsage(nt.id)
+                                Text(used > 0 ? "\(nt.fieldNames.count) 欄 · \(used) 枚" : "\(nt.fieldNames.count) 欄").font(.footnote).foregroundStyle(.secondary)
                             }
                         }
+                        // 左にスワイプで削除 (使っているカードがなければ)
+                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                            Button { pendingNotetypeDelete = nt } label: { Label("削除", systemImage: "trash") }.tint(.red)
+                        }
+                    }
+                    // 追加: 既存のノートタイプを写して作る (欄・カードタイプ・CSS を引き継ぐ)
+                    Menu {
+                        ForEach(sorted) { nt in
+                            Button(nt.name) { Task { if let id = await store.addNotetype(basedOn: nt.id) { openNotetype = id } } }
+                        }
+                    } label: {
+                        Label("ノートタイプを追加…", systemImage: "plus")
                     }
                 } header: { Text("ノートタイプ") } footer: {
-                    Text("欄の追加・並べ替え、表面・裏面のテンプレート、CSS を編集できます。")
+                    Text("欄の追加・並べ替え、表面・裏面のテンプレート、CSS を編集できます。追加は既存のノートタイプを写して作ります。カードが使っているノートタイプは消せません。")
                 }
                 Section("一覧") {
                     Toggle("タグを表示", isOn: $store.showTagsInList)
@@ -850,6 +867,16 @@ struct SettingsView: View {
                 } header: { Text("プレビューと編集") }
             }
             .navigationTitle("設定")
+            .navigationDestination(item: $openNotetype) { id in NotetypeEditorView(notetypeId: id).environmentObject(store) }
+            .alert("このノートタイプを削除しますか？", isPresented: Binding(get: { pendingNotetypeDelete != nil }, set: { if !$0 { pendingNotetypeDelete = nil } }), presenting: pendingNotetypeDelete) { nt in
+                if store.notetypeUsage(nt.id) == 0 {
+                    Button("削除", role: .destructive) { Task { await store.deleteNotetype(nt.id) } }
+                }
+                Button("キャンセル", role: .cancel) {}
+            } message: { nt in
+                let used = store.notetypeUsage(nt.id)
+                Text(used > 0 ? "「\(nt.name)」は \(used) 枚のカードが使っているので消せません。先にカードを別のノートタイプへ移すか削除してください。" : "「\(nt.name)」の欄・テンプレート・CSS が消えます。同期フォルダにも反映されます。")
+            }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完了") { dismiss() } } }
             .alert("外部ファイルの同期とは", isPresented: $showFolderHelp) {

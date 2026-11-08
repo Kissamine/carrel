@@ -23,7 +23,8 @@ struct Note: Identifiable, Hashable {
         plain = p
         plainLower = p.lowercased()
         let raw = fields.first ?? ""
-        let parts = raw.replacingOccurrences(of: "\n", with: "").components(separatedBy: "<br>")
+        // <br> だけでなく、本文中の改行 (\n) や </div> </p> も行の区切りとして扱う (macOS 版と同じ)
+        let parts = raw.replacingOccurrences(of: "<br\\s*/?>|</div>|</p>|\\r?\\n", with: "\u{1}", options: [.regularExpression, .caseInsensitive]).components(separatedBy: "\u{1}")
         titleLines = parts.map { Note.stripHTML($0) }.filter { !$0.isEmpty }.prefix(3).map { String($0) }
         sortKey = Note.sortKey(titleLines.joined(separator: " "))
     }
