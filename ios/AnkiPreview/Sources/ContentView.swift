@@ -16,7 +16,7 @@ struct ContentView: View {
                 // 自前で並べて、一覧は上・左・下の縁まで届くようにする
                 HStack(spacing: 0) {
                     if showSidebar {
-                        NavigationStack { NoteListView(showSettings: $showSettings, wide: true) }
+                        NavigationStack { NoteListView(showSettings: $showSettings, wide: true, sidebar: $showSidebar) }
                             .frame(width: 340)
                             .transition(.move(edge: .leading))
                         Divider().ignoresSafeArea()
@@ -24,12 +24,12 @@ struct ContentView: View {
                     NavigationStack {
                         DetailView(showSettings: $showSettings)
                             .toolbar {
-                                // 分割表示にあった一覧の表示・非表示ボタン
-                                ToolbarItem(placement: .topBarLeading) {
-                                    Button {
-                                        withAnimation(.easeInOut(duration: 0.25)) { showSidebar.toggle() }
-                                    } label: { Image(systemName: "sidebar.left") }
-                                    .accessibilityLabel(showSidebar ? "一覧を隠す" : "一覧を表示")
+                                // 一覧を隠しているときだけ、カード側の左上に「一覧を表示」を出す
+                                if !showSidebar {
+                                    ToolbarItem(placement: .topBarLeading) {
+                                        Button { withAnimation(.easeInOut(duration: 0.25)) { showSidebar = true } } label: { Image(systemName: "sidebar.left") }
+                                            .accessibilityLabel("一覧を表示")
+                                    }
                                 }
                             }
                     }
@@ -435,6 +435,8 @@ struct NoteListView: View {
     @Binding var showSettings: Bool
     /// 横に広い画面 (Duo を開いたとき・iPad) か
     var wide: Bool
+    /// 広い画面での一覧の表示・非表示 (ロゴの右の切り替えボタンが変える)
+    var sidebar: Binding<Bool>? = nil
     /// スワイプで削除しようとしているカード
     @State private var pendingDelete: Note? = nil
 
@@ -558,6 +560,13 @@ struct NoteListView: View {
             }
             if wide {
                 ToolbarItem(placement: .bottomBar) { optionsMenu }
+                // 一覧を隠すボタン (分割表示にあったもの)。隠したあとはカード側の左上に出る
+                if let sidebar {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button { withAnimation(.easeInOut(duration: 0.25)) { sidebar.wrappedValue = false } } label: { Image(systemName: "sidebar.left") }
+                            .accessibilityLabel("一覧を隠す")
+                    }
+                }
             }
             // 学習 (期限の来たカード + 未学習)
             ToolbarItem(placement: .bottomBar) {
