@@ -235,7 +235,8 @@ struct StudyView: View {
                                     highlights: [], controller: preview,
                                     onImage: { url in store.lightbox = LightboxItem(url: url) },
                                     fixedInsets: true)
-                            .ignoresSafeArea()
+                            // 上下だけ画面いっぱいに。左右の安全領域 (Duo の閉じた画面では右端にツールバーと時計の帯が来る) は避ける
+                            .ignoresSafeArea(edges: .vertical)
                             .id(card.id)                 // カードが変わったら作り直して、フェードで切り替える
                             .transition(.opacity)
                     }
