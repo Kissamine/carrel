@@ -177,8 +177,10 @@ final class Store: ObservableObject {
         var added = 0
         guard write({ db in added = try db.importSample(from: sample.path) }) else { return }
         await load()
-        if added == 0 { error = "サンプルのカードはすでに入っています (「サンプル」で検索すると出ます)" }
-        else { keyword = "サンプル" }
+        // 追加したサンプルがすぐ見えるよう、ほかの絞り込みを外して「サンプル」タグだけを選ぶ
+        if added == 0 { error = "サンプルのカードはすでに入っています (タグ「サンプル」で絞り込むと出ます)" }
+        clearFilters()
+        selectedTags = ["サンプル"]
     }
 
     /// チュートリアル (初回は自動で出す。使い方ガイドからいつでも)

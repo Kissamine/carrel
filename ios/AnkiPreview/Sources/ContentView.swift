@@ -499,10 +499,10 @@ struct NoteListView: View {
             }
         }
         .toolbarBackground(.hidden, for: .navigationBar)
-        .alert("このカードを削除しますか？", isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } })) {
-            Button("削除", role: .destructive) { if let n = pendingDelete { store.deleteNote(n) }; pendingDelete = nil }
-            Button("キャンセル", role: .cancel) { pendingDelete = nil }
-        } message: { Text("ノートとそのカードが消えます。同期フォルダにも反映されます") }
+        .alert("このカードを削除しますか？", isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }), presenting: pendingDelete) { note in
+            Button("削除", role: .destructive) { store.deleteNote(note) }
+            Button("キャンセル", role: .cancel) {}
+        } message: { _ in Text("ノートとそのカードが消えます。同期フォルダにも反映されます") }
         .modifier(CompactSearch(enabled: !wide, text: $store.keyword))
         .autocorrectionDisabled()
         .navigationTitle("")   // 題はロゴ (左端) で出すので、文字の題は空に
@@ -572,7 +572,7 @@ struct NoteListView: View {
                     Text(store.keyword.isEmpty ? "絞り込みに合うカードがありません" : "「\(store.keyword)」に合うカードがありません")
                 } actions: {
                     if store.hasActiveFilter || !store.keyword.isEmpty {
-                        Button("絞り込みを解除") { store.clearFilters() }.buttonStyle(.borderedProminent)
+                        Button("絞り込みを解除") { store.clearFilters() }.buttonStyle(.glassProminent).tint(Color.carrelBlueDeep)
                     }
                 }
             }
@@ -607,16 +607,23 @@ struct NoteListView: View {
     /// タグのチップ (横スクロール)。デッキと学習状況はメニューから
     private var filters: some View {
         Group {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(store.allTags, id: \.0) { tag, count in
-                        Button {
-                            if store.selectedTags.contains(tag) { store.selectedTags.remove(tag) } else { store.selectedTags.insert(tag) }
-                        } label: { chip("\(tag) \(count)", on: store.selectedTags.contains(tag), icon: nil) }
-                        .buttonStyle(.plain)
+            ScrollViewReader { proxy in
+                ScrollView(.horizontal, showsIndicators: false) {
+                    let ordered = store.allTags.filter { store.selectedTags.contains($0.0) } + store.allTags.filter { !store.selectedTags.contains($0.0) }
+                    HStack(spacing: 8) {
+                        Color.clear.frame(width: 0, height: 0).id("tags-start")
+                        ForEach(ordered, id: \.0) { tag, count in
+                            Button {
+                                withAnimation(.easeInOut(duration: 0.25)) {
+                                    if store.selectedTags.contains(tag) { store.selectedTags.remove(tag) } else { store.selectedTags.insert(tag) }
+                                }
+                            } label: { chip("\(tag) \(count)", on: store.selectedTags.contains(tag), icon: nil) }
+                            .buttonStyle(.plain)
+                        }
                     }
+                    .padding(.horizontal, 16)
                 }
-                .padding(.horizontal, 16)
+                .onChange(of: store.selectedTags) { withAnimation { proxy.scrollTo("tags-start", anchor: .leading) } }
             }
         }
     }
