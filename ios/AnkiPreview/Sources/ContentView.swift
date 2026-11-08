@@ -199,7 +199,7 @@ struct CardInfoView: View {
                         }
                     }
                 } header: { Text("タグ") } footer: {
-                    Text("デッキとタグの変更は、この iPhone 内のコピーにだけ保存されます。Anki 本体には反映されず、次にフォルダから取り込み直すと元に戻ります。")
+                    Text("デッキとタグの変更は、同期フォルダへ自動で保存されます。")
                 }
                 ForEach(store.cards[note.id] ?? []) { c in
                     let name = store.notetypes[note.notetypeId]?.templates[safe: c.ord]?.name ?? "カード \(c.ord + 1)"
