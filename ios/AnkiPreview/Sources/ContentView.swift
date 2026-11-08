@@ -565,7 +565,15 @@ struct NoteListView: View {
                     Button("もう一度読み込む") { Task { await store.load() } }.buttonStyle(.borderedProminent)
                 }
             } else if store.filtered.isEmpty {
-                ContentUnavailableView.search(text: store.keyword)
+                ContentUnavailableView {
+                    Label("結果なし", systemImage: "magnifyingglass")
+                } description: {
+                    Text(store.keyword.isEmpty ? "絞り込みに合うカードがありません" : "「\(store.keyword)」に合うカードがありません")
+                } actions: {
+                    if store.hasActiveFilter || !store.keyword.isEmpty {
+                        Button("絞り込みを解除") { store.clearFilters() }.buttonStyle(.borderedProminent)
+                    }
+                }
             }
         }
     }

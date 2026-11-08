@@ -297,10 +297,14 @@ final class Store: ObservableObject {
         return true
     }
 
+    /// タグの一覧を数え直す。選択中のタグがもう存在しなければ選択から外す
+    /// (外さないと、一覧に出ないタグで絞り込まれたまま「結果なし」になってしまう)
     private func rebuildTags() {
         var count: [String: Int] = [:]
         for n in notes { for t in n.tags { count[t, default: 0] += 1 } }
         allTags = count.sorted { $0.value != $1.value ? $0.value > $1.value : $0.key < $1.key }
+        let gone = selectedTags.filter { count[$0] == nil }
+        if !gone.isEmpty { selectedTags.subtract(gone) }
     }
 
     // ---- ノートの作成・編集・削除 ----
@@ -593,9 +597,7 @@ final class Store: ObservableObject {
             decks = result.2.filter { $0.name != "Default" || nd.values.contains($0.id) }
             if let sel = selectedNoteId, !notes.contains(where: { $0.id == sel }) { selectedNoteId = nil }
             if let d = selectedDeck, !decks.contains(where: { $0.id == d }) { selectedDeck = nil }
-            var count: [String: Int] = [:]
-            for n in notes { for t in n.tags { count[t, default: 0] += 1 } }
-            allTags = count.sorted { $0.value != $1.value ? $0.value > $1.value : $0.key < $1.key }
+            rebuildTags()
             refilter()
         } catch {
             self.error = "コレクションを読めません: " + error.localizedDescription
@@ -610,9 +612,7 @@ final class Store: ObservableObject {
         if let i = notes.firstIndex(where: { $0.id == note.id }) {
             notes[i] = Note(id: note.id, notetypeId: note.notetypeId, fields: note.fields, tags: clean, modified: Int64(Date().timeIntervalSince1970))
         }
-        var count: [String: Int] = [:]
-        for n in notes { for t in n.tags { count[t, default: 0] += 1 } }
-        allTags = count.sorted { $0.value != $1.value ? $0.value > $1.value : $0.key < $1.key }
+        rebuildTags()
         refilter()
     }
 
