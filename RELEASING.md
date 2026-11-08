@@ -49,3 +49,20 @@ spctl -a -vv "dist/mac-arm64/Carrel.app"      # "accepted" "source=Notarized Dev
 ## 3. Intel Mac 向け
 同梱 Python (`macos/.venv`) が arm64 なので、現状は Apple Silicon のみ。
 Intel 向けを出すときは x86_64 の venv を別に作り、`--x64` でビルドする。
+
+
+---
+
+# リリース手順 (iOS 版 Carrel)
+
+申請に入力する文面・手順の下書きは `ios/AppStore/metadata.md`、画像は `ios/AppStore/iPhone` と `ios/AppStore/iPad` にある。
+
+1. Apple Developer Program (有料) のチームを Xcode › Settings › Accounts に追加する (無料の Personal Team では App Store に出せない)
+2. バージョンを上げるときは `ios/AnkiPreview/AnkiPreview.xcodeproj` の `MARKETING_VERSION` と `CURRENT_PROJECT_VERSION` を変える
+3. アーカイブして App Store Connect にアップロード:
+   ```bash
+   cd ios/AnkiPreview
+   xcodebuild -project AnkiPreview.xcodeproj -scheme AnkiPreview -configuration Release -destination 'generic/platform=iOS' -archivePath build/Carrel.xcarchive -allowProvisioningUpdates archive
+   xcodebuild -exportArchive -archivePath build/Carrel.xcarchive -exportOptionsPlist ExportOptions.plist -exportPath build/export -allowProvisioningUpdates
+   ```
+4. App Store Connect でビルドを選び、`metadata.md` の内容を入力して審査へ提出する
