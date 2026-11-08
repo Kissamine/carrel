@@ -22,9 +22,14 @@ async function reopenCollection() {
   })();
   try { return await reopening; } finally { reopening = null; }
 }
+// コレクションやメディアを変える呼び出し。終わったら iCloud Drive への書き出しを予約する
+// (ノートだけでなく、テンプレート・CSS・メディアの変更も iPhone 側に届くように)
+const MUTATING = new Set(['saveNote', 'addNote', 'deleteNotes', 'replaceInNotes', 'saveTemplate', 'addMedia', 'deleteMedia']);
 const call = async (method, params) => {
   try {
-    return await window.anki.call(method, params);
+    const r = await window.anki.call(method, params);
+    if (MUTATING.has(method) && typeof scheduleMirror === 'function') scheduleMirror();
+    return r;
   } catch (e) {
     const msg = e.message || '';
     // Anki 本体が動いている間はコレクションに触れない。終了を待ってからやり直す
@@ -2161,7 +2166,6 @@ async function save({ sync: alsoSync = null } = {}) {
     });
     state.dirty = false;
     updateSaveButton();
-    scheduleMirror();
     const rendered = await call('renderNote', { id: state.selected.id });
     showCard(rendered);
     await search();
@@ -2735,7 +2739,6 @@ async function addNote() {
   const deckId = await call('deckId', { name: el('addDeck').value });
   const notetypeId = Number(el('addModel').value);
   const names = await call('fieldNames', { notetypeId });
-  scheduleMirror();
   const created = await call('addNote', {
     notetypeId,
     deckId,
@@ -2771,7 +2774,6 @@ async function deleteNote() {
     console.log('[trash] 控えを取れません: ' + e.message);
   }
   await call('deleteNotes', { ids: [note.id] });
-  scheduleMirror();
   el('deleteDialog').close();
   state.selected = null;
   closeEditor();
