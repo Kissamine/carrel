@@ -35,3 +35,4 @@ macos/hs_err_pid*.log
 ios/Carrel/build-sim/
 macos/pyruntime/
 macos/pyruntime-dl/
+ios/AppStore/review-demo.mp4
