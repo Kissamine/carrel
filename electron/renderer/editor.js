@@ -174,8 +174,18 @@ export function createEditor(root, fieldNames, values, hooks) {
     if (Math.abs(area.clientHeight - next) < 2 && area.scrollHeight <= limit) return;
     const scroll = area.scrollTop;
     const outer = root.scrollTop;
-    area.style.height = 'auto';
-    area.style.height = Math.min(area.scrollHeight + 2, limit) + 'px';
+    // 測り直しのあいだ外側の箱が縮まないように最低の高さを留めておく。
+    // 縮むと、見ている位置 (scrollTop) がブラウザに丸められ、編集欄全体が別の場所へ飛んでしまう
+    const wrap = area.parentNode;
+    if (area.scrollHeight > area.clientHeight) {
+      // 広げるだけなら auto を経由しない (auto にした瞬間、他の欄の位置がずれて見える)
+      area.style.height = Math.min(area.scrollHeight + 2, limit) + 'px';
+    } else {
+      wrap.style.minHeight = wrap.offsetHeight + 'px';   // 縮めるあいだ欄の箱を留める
+      area.style.height = 'auto';
+      area.style.height = Math.min(area.scrollHeight + 2, limit) + 'px';
+      wrap.style.minHeight = '';
+    }
     area.scrollTop = scroll;
     if (root.scrollTop !== outer) root.scrollTop = outer;
     const layer = hl(i);
