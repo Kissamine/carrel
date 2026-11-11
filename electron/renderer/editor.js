@@ -158,9 +158,16 @@ export function createEditor(root, fieldNames, values, hooks) {
     const i = area.dataset.index;
     if (!now) {
       clearTimeout(fitTimers[i]);
+      // 改行などで中身が枠からはみ出したときは待たずに広げる (待つと枠が追いつかずに見える)。
+      // はみ出していないときだけ、少し落ち着いてから測り直す
+      if (area.scrollHeight > area.clientHeight + 1) {
+        fitTimers[i] = requestAnimationFrame(() => fit(area, true));
+        return;
+      }
       fitTimers[i] = setTimeout(() => fit(area, true), 60);
       return;
     }
+    cancelAnimationFrame(fitTimers[i]);
     const limit = Math.max(320, root.clientHeight);
     const next = Math.min(area.scrollHeight, limit);
     // いまの高さで足りているなら、測り直さない
@@ -308,7 +315,11 @@ export function createEditor(root, fieldNames, values, hooks) {
   areas().forEach((area) => {
     const i = parseInt(area.dataset.index, 10);
     paint(i);
-    area.addEventListener('input', () => { schedulePaint(i); notify(i); });
+    area.addEventListener('input', () => {
+      // はみ出したらその場で広げる (塗り直しを待たない)
+      if (area.scrollHeight > area.clientHeight + 1) fit(area, true);
+      schedulePaint(i); notify(i);
+    });
     area.addEventListener('scroll', () => { hl(i).scrollTop = area.scrollTop; });
     area.addEventListener('focus', () => {
       area.parentNode.classList.add('focus');
