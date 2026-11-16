@@ -957,8 +957,16 @@ async function autoNoteRefs(ask) {
 function renderAttachments() {
   const box = el('aiAttachList');
   box.innerHTML = '';
-  box.hidden = !aiAttachments.length;
-  aiAttachments.forEach((a, k) => {
+  const shown = aiAttachments.map((a, k) => [a, k]).filter(([a]) => !a.url);
+  box.hidden = !shown.length;
+  // URL の印に読み込み状態を映す
+  el('aiPrompt').querySelectorAll('.mention.url').forEach((m) => {
+    const a = aiAttachments.find((x) => x.url === m.dataset.url);
+    m.classList.toggle('loading', !!(a && a.loading));
+    m.classList.toggle('failed', !!(a && a.failed));
+    m.title = a && a.failed ? `読み込めませんでした: ${m.dataset.url}` : m.dataset.url;
+  });
+  shown.forEach(([a, k]) => {
     const chip = document.createElement('span');
     chip.className = 'chip-file' + (a.kind === 'note' ? ' note' : '');
     const kind = document.createElement('b');
@@ -1007,7 +1015,7 @@ function promptText() {
       if (child.nodeType === 3) { out += child.nodeValue; continue; }
       if (child.nodeType !== 1) continue;
       if (child.classList.contains('mention')) {
-        out += child.dataset.snippet ? `/「${child.dataset.label}」` : `@「${child.dataset.label}」`;
+        out += child.dataset.url ? child.dataset.url : (child.dataset.snippet ? `/「${child.dataset.label}」` : `@「${child.dataset.label}」`);
         continue;
       }
       if (child.tagName === 'BR') { out += '\n'; continue; }
@@ -1040,14 +1048,52 @@ function syncPromptState() {
   const box = el('aiPrompt');
   const present = new Set([...box.querySelectorAll('.mention')].map((m) => m.dataset.label));
   const before = aiAttachments.length;
-  aiAttachments = aiAttachments.filter((a) => !((a.kind === 'note' || a.kind === 'snippet') && a.label && !present.has(a.label)));
+  const urls = new Set([...box.querySelectorAll('.mention.url')].map((m) => m.dataset.url));
+  aiAttachments = aiAttachments.filter((a) => !((a.kind === 'note' || a.kind === 'snippet') && a.label && !present.has(a.label)) && !(a.url && !urls.has(a.url)));
   if (aiAttachments.length !== before) renderAttachments();
   box.classList.toggle('empty', !promptText().trim() && !box.querySelector('.mention'));
 }
 
-/** 指示欄に書かれた URL を資料として取り込む (同じものは 1 回だけ) */
+/** 指示欄の素の URL を、@ の印と同じ見た目のチップに置き換える (読み込み状態も印に出す) */
+function chipifyUrls() {
+  const box = el('aiPrompt');
+  const sel = window.getSelection();
+  const walker = document.createTreeWalker(box, NodeFilter.SHOW_TEXT);
+  const texts = [];
+  let n;
+  while ((n = walker.nextNode())) if (!n.parentNode.closest('.mention')) texts.push(n);
+  for (const text of texts) {
+    const re = /https?:\/\/[^\s「」()<>"']+/g;
+    const m = re.exec(text.nodeValue);
+    if (!m) continue;
+    // カーソルがまだ URL の中 (末尾を打っている途中) なら待つ
+    if (sel && sel.rangeCount && sel.getRangeAt(0).startContainer === text && sel.getRangeAt(0).startOffset <= m.index + m[0].length && sel.getRangeAt(0).startOffset > m.index) continue;
+    const url = m[0];
+    const chip = document.createElement('span');
+    chip.className = 'mention url';
+    chip.contentEditable = 'false';
+    chip.dataset.label = url;
+    chip.dataset.url = url;
+    chip.textContent = url.replace(/^https?:\/\//, '').replace(/\/$/, '').slice(0, 48);
+    chip.title = url;
+    const after = document.createTextNode(text.nodeValue.slice(m.index + url.length) || ' ');
+    text.nodeValue = text.nodeValue.slice(0, m.index);
+    text.after(chip, after);
+    // 続きを打てるよう、印の直後にカーソルを置く
+    if (sel) { const r = document.createRange(); r.setStart(after, after.nodeValue.startsWith(' ') ? 1 : 0); r.collapse(true); sel.removeAllRanges(); sel.addRange(r); }
+  }
+}
+
+/** 指示欄に書かれた URL を資料として取り込む (同じものは 1 回だけ)。本文中の印が資料の目印になるので、下の一覧には出さない */
 async function attachUrlsInPrompt() {
-  const urls = [...promptText().matchAll(/https?:\/\/[^\s「」()<>"']+/g)].map((u) => u[0]);
+  chipifyUrls();
+  const box = el('aiPrompt');
+  const urls = [...box.querySelectorAll('.mention.url')].map((c) => c.dataset.url);
+  // 印が消えた URL は資料からも外す
+  const present = new Set(urls);
+  const before = aiAttachments.length;
+  aiAttachments = aiAttachments.filter((a) => !a.url || present.has(a.url));
+  if (aiAttachments.length !== before) renderAttachments();
   for (const url of urls) {
     if (aiAttachments.some((a) => a.url === url)) continue;
     const pending = { kind: 'url', name: url, url, text: '', loading: true };
@@ -3473,25 +3519,41 @@ async function boot() {
   el('replaceOpen').onclick = openReplace;
   el('aiOpen').onclick = () => (el('aiPop').hidden ? openAi() : closeAi());
   el('aiPlus').onclick = () => addAttachmentFiles();
+  // Finder のダイアログで画像や PDF を選ぶ (複数可)
+  async function addAttachmentFiles() {
+    let picked = [];
+    try { picked = await window.anki.aiPickFiles(); } catch (e) { toast('ファイルを開けません: ' + e.message); return; }
+    pushFiles(picked);
+  }
+  // 読み込んだファイルの一覧を資料に足す (大きさの確認と件数の表示を共通に)
+  function pushFiles(files) {
+    let added = 0;
+    for (const f of files || []) {
+      if (f.size > 25 * 1048576) { toast(`${f.name} は大きすぎます (25MB まで)`); continue; }
+      if (aiAttachments.some((a) => a.kind === 'file' && a.name === f.name && a.dataBase64 === f.dataBase64)) continue;
+      aiAttachments.push({ kind: 'file', name: f.name, mime: f.mime, dataBase64: f.dataBase64 });
+      added++;
+    }
+    renderAttachments();
+    if (added > 1) toast(`${added} 件を添付しました`);
+    return added;
+  }
   // 指示欄に貼った画像はそのまま資料に
   el('aiPrompt').addEventListener('paste', async (e) => {
     const items = [...(e.clipboardData ? e.clipboardData.items : [])];
     const shots = items.filter((it) => it.kind === 'file' && /^image\//.test(it.type));
     if (!shots.length) {
       // Finder で ⌘C したファイル (複数可) は file:// の一覧で来る。中身は本体に読んでもらう
-      const uris = (e.clipboardData.getData('text/uri-list') || '').split(/\r?\n/).filter((u) => /^file:\/\//.test(u));
-      if (uris.length) e.preventDefault();
-      const fromFinder = uris.length ? await window.anki.readFileUris(uris).catch(() => []) : [];
+      const uriList = (e.clipboardData.getData('text/uri-list') || '').split(/\r?\n/).filter((u) => /^file:\/\//.test(u));
+      // Finder で複数ファイルを ⌘C すると、text/plain に絶対パスが改行区切りで入る (uri-list は先頭だけのことがある)
+      const plainPaths = (e.clipboardData.getData('text/plain') || '').split(/\r?\n/).map((l) => l.trim())
+        .filter((l) => /^\/.+\.(png|jpe?g|gif|webp|pdf)$/i.test(l));
+      const uris = [...new Set([...uriList, ...plainPaths.map((pth) => 'file://' + encodeURI(pth))])];
       if (uris.length) {
+        e.preventDefault();
+        const fromFinder = await window.anki.readFileUris(uris).catch(() => []);
         if (!fromFinder.length) { toast('画像や PDF ではないファイルです'); return; }
-        let added = 0;
-        for (const f of fromFinder) {
-          if (f.size > 25 * 1048576) { toast(`${f.name} は大きすぎます (25MB まで)`); continue; }
-          aiAttachments.push({ kind: 'file', name: f.name, mime: f.mime, dataBase64: f.dataBase64 });
-          added++;
-        }
-        renderAttachments();
-        if (added > 1) toast(`${added} 件を添付しました`);
+        pushFiles(fromFinder);
         return;
       }
       // 飾りは持ち込まず、文字だけ入れる
@@ -3547,15 +3609,15 @@ async function boot() {
   dropZone.addEventListener('drop', async (e) => {
     e.preventDefault();
     dropZone.classList.remove('drop');
+    const files = [];
     for (const f of [...(e.dataTransfer.files || [])]) {
       if (!/^(image\/|application\/pdf)/.test(f.type)) { toast(`${f.name} は画像か PDF ではありません`); continue; }
-      if (f.size > 25 * 1048576) { toast(`${f.name} は大きすぎます (25MB まで)`); continue; }
       const buf = new Uint8Array(await f.arrayBuffer());
       let bin = '';
       for (let k = 0; k < buf.length; k += 8192) bin += String.fromCharCode.apply(null, buf.subarray(k, k + 8192));
-      aiAttachments.push({ kind: 'file', name: f.name, mime: f.type, dataBase64: btoa(bin) });
+      files.push({ name: f.name, mime: f.type, size: f.size, dataBase64: btoa(bin) });
     }
-    renderAttachments();
+    pushFiles(files);
   });
   // 記憶チップ: 設定の AI へ (無ければその場で学ぶ)
   el('aiMemoryChip').onclick = async () => {

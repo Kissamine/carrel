@@ -1549,3 +1549,9 @@ dialog input[type="radio"],
 }
 #settingsDetail input.switch:checked { background: #34C759; }
 #settingsDetail input.switch:checked::after { left: 18px; }
+
+/* 指示欄の URL の印 (@ と同じ形。読み込み中は薄く、失敗は赤) */
+#aiPrompt .mention.url { color: #b9d8ff; background: rgba(140,190,255,.14); box-shadow: 0 0 0 1px rgba(140,190,255,.3); }
+#aiPrompt .mention.url::before { content: '🔗 '; font-size: 10px; }
+#aiPrompt .mention.url.loading { opacity: .55; }
+#aiPrompt .mention.url.failed { color: #ff9a9a; background: rgba(255,120,120,.14); box-shadow: 0 0 0 1px rgba(255,120,120,.35); }
