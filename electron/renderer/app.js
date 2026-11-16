@@ -3529,7 +3529,8 @@ async function boot() {
   function pushFiles(files) {
     let added = 0;
     for (const f of files || []) {
-      if (f.size > 25 * 1048576) { toast(`${f.name} は大きすぎます (25MB まで)`); continue; }
+      if (f.skipped) { toast(`${f.name}: ${f.skipped}`); continue; }
+      if (f.size > 100 * 1048576) { toast(`${f.name} は大きすぎます (100MB まで)`); continue; }
       if (aiAttachments.some((a) => a.kind === 'file' && a.name === f.name && a.dataBase64 === f.dataBase64)) continue;
       aiAttachments.push({ kind: 'file', name: f.name, mime: f.mime, dataBase64: f.dataBase64 });
       added++;
@@ -3544,16 +3545,13 @@ async function boot() {
     const shots = items.filter((it) => it.kind === 'file' && /^image\//.test(it.type));
     if (!shots.length) {
       // Finder で ⌘C したファイル (複数可) は file:// の一覧で来る。中身は本体に読んでもらう
-      const uriList = (e.clipboardData.getData('text/uri-list') || '').split(/\r?\n/).filter((u) => /^file:\/\//.test(u));
-      // Finder で複数ファイルを ⌘C すると、text/plain に絶対パスが改行区切りで入る (uri-list は先頭だけのことがある)
-      const plainPaths = (e.clipboardData.getData('text/plain') || '').split(/\r?\n/).map((l) => l.trim())
-        .filter((l) => /^\/.+\.(png|jpe?g|gif|webp|pdf)$/i.test(l));
-      const uris = [...new Set([...uriList, ...plainPaths.map((pth) => 'file://' + encodeURI(pth))])];
-      if (uris.length) {
+      // Finder で ⌘C したファイル (複数可)。renderer に渡る clipboardData は先頭の 1 件しか持たないことがあるので、
+      // 本体にペーストボードの一覧を読んでもらう (zip は中の画像・PDF を取り出す)
+      const paths = await window.anki.clipboardFiles().catch(() => []);
+      if (paths.length) {
         e.preventDefault();
-        const fromFinder = await window.anki.readFileUris(uris).catch(() => []);
-        if (!fromFinder.length) { toast('画像や PDF ではないファイルです'); return; }
-        pushFiles(fromFinder);
+        const read = await window.anki.readFilePaths(paths).catch(() => []);
+        pushFiles(read);
         return;
       }
       // 飾りは持ち込まず、文字だけ入れる
@@ -3609,8 +3607,11 @@ async function boot() {
   dropZone.addEventListener('drop', async (e) => {
     e.preventDefault();
     dropZone.classList.remove('drop');
+    const dropped = [...(e.dataTransfer.files || [])];
+    const paths = dropped.map((f) => (window.anki.pathForFile ? window.anki.pathForFile(f) : f.path)).filter(Boolean);
+    if (paths.length) { pushFiles(await window.anki.readFilePaths(paths).catch(() => [])); return; }
     const files = [];
-    for (const f of [...(e.dataTransfer.files || [])]) {
+    for (const f of dropped) {
       if (!/^(image\/|application\/pdf)/.test(f.type)) { toast(`${f.name} は画像か PDF ではありません`); continue; }
       const buf = new Uint8Array(await f.arrayBuffer());
       let bin = '';

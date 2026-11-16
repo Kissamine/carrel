@@ -822,15 +822,12 @@ app.whenReady().then(async () => {
   ipcMain.handle('ai:pickFiles', async () => {
     const picked = await dialog.showOpenDialog({
       properties: ['openFile', 'multiSelections'],
-      filters: [{ name: '画像・PDF', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'pdf'] }],
+      filters: [{ name: '画像・PDF・zip', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'pdf', 'zip'] }],
     });
     if (picked.canceled) return [];
-    const mimes = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', pdf: 'application/pdf' };
-    return picked.filePaths.map((file) => {
-      const ext = path.extname(file).slice(1).toLowerCase();
-      const data = fs.readFileSync(file);
-      return { name: path.basename(file), mime: mimes[ext] || 'application/octet-stream', size: data.length, dataBase64: data.toString('base64') };
-    });
+    const out = [];
+    for (const file of picked.filePaths) { try { readAttachable(file, out); } catch (e) { out.push({ name: path.basename(file), skipped: e.message }); } }
+    return out;
   });
   // URL の中身を文字にして持ってくる (HTML の場合はタグを落とす)
   ipcMain.handle('ai:fetchUrl', async (_e, url) => {
@@ -868,6 +865,52 @@ app.whenReady().then(async () => {
     }
   });
   ipcMain.handle('clipboard:text', () => require('electron').clipboard.readText());
+  // Finder で ⌘C したファイルの一覧。renderer 側の clipboardData は先頭 1 件しか渡さないことがあるので、
+  // macOS のペーストボード (NSFilenamesPboardType) を本体で読む
+  ipcMain.handle('clipboard:files', () => {
+    const { clipboard } = require('electron');
+    const out = [];
+    try {
+      const plist = clipboard.read('NSFilenamesPboardType');
+      if (plist) for (const m of plist.matchAll(/<string>([^<]+)<\/string>/g)) out.push(m[1].replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>'));
+    } catch { /* 無ければ空 */ }
+    if (!out.length) {
+      try { const u = clipboard.read('public.file-url'); if (u) out.push(decodeURIComponent(new URL(u).pathname)); } catch { /* 無ければ空 */ }
+    }
+    return out.filter((p) => fs.existsSync(p));
+  });
+  // パスの一覧から、画像・PDF (zip の中身も) を読む
+  const FILE_LIMIT = 100 * 1048576;
+  const MIMES = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', pdf: 'application/pdf' };
+  function readAttachable(file, out, depth = 0) {
+    const ext = path.extname(file).slice(1).toLowerCase();
+    if (ext === 'zip' && depth === 0) {
+      // zip は一時フォルダに展開して、中の画像・PDF を順に (隠しファイルと __MACOSX は除く)
+      const tmp = fs.mkdtempSync(path.join(require('os').tmpdir(), 'carrel-zip-'));
+      try {
+        require('child_process').execFileSync('/usr/bin/ditto', ['-x', '-k', file, tmp], { stdio: 'ignore' });
+        const walk = (dir) => {
+          for (const e of fs.readdirSync(dir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name, 'ja'))) {
+            if (e.name.startsWith('.') || e.name === '__MACOSX') continue;
+            const p = path.join(dir, e.name);
+            if (e.isDirectory()) walk(p); else readAttachable(p, out, depth + 1);
+          }
+        };
+        walk(tmp);
+      } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+      return;
+    }
+    if (!MIMES[ext]) { out.push({ name: path.basename(file), skipped: '画像・PDF・zip ではありません' }); return; }
+    const size = fs.statSync(file).size;
+    if (size > FILE_LIMIT) { out.push({ name: path.basename(file), skipped: `大きすぎます (${Math.round(size / 1048576)}MB、100MB まで)` }); return; }
+    const data = fs.readFileSync(file);
+    out.push({ name: path.basename(file), mime: MIMES[ext], size, dataBase64: data.toString('base64') });
+  }
+  ipcMain.handle('files:readPaths', (_e, paths) => {
+    const out = [];
+    for (const p of (Array.isArray(paths) ? paths : [])) { try { if (fs.existsSync(p)) readAttachable(p, out); } catch (e) { out.push({ name: path.basename(p), skipped: e.message }); } }
+    return out;
+  });
   // 貼り付け (Finder で ⌘C したファイル) の file:// 一覧から、画像・PDF の中身を返す
   ipcMain.handle('files:readUris', (_e, uris) => {
     const mimes = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', pdf: 'application/pdf' };
