@@ -6,6 +6,45 @@ const { shell, app, BrowserWindow, ipcMain, protocol, net, dialog, session, Menu
 const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
+
+// 送る前に画像を縮める。AI 各社は 1 回の依頼で画像の合計 (Anthropic は 50MB)、1 枚の大きさ
+// (長辺 8000px、約 5MB) に上限があるので、長辺 2000px・JPEG 品質 80 まで落として合計 40MB に収める。
+// 文字の読み取りには 2000px で十分で、送信も速くなる
+function shrinkImages(files) {
+  const { nativeImage } = require('electron');
+  const TOTAL = 40 * 1048576;
+  const out = files.map((f) => {
+    if (!/^image\/(png|jpeg|gif|webp)$/.test(f.mime || '')) return f;
+    const raw = Buffer.from(f.dataBase64, 'base64');
+    if (raw.length < 2 * 1048576) return f;   // 小さいものはそのまま
+    try {
+      let img = nativeImage.createFromBuffer(raw);
+      const { width, height } = img.getSize();
+      const long = Math.max(width, height);
+      if (long > 2000) img = img.resize({ [width >= height ? 'width' : 'height']: 2000, quality: 'best' });
+      const jpg = img.toJPEG(80);
+      if (jpg.length < raw.length) return { ...f, mime: 'image/jpeg', dataBase64: jpg.toString('base64'), name: f.name.replace(/\.(png|gif|webp)$/i, '.jpg') };
+    } catch { /* 読めなければそのまま */ }
+    return f;
+  });
+  // それでも合計が大きければ、大きい順にさらに品質を落とす
+  const size = () => out.reduce((n, f) => n + (f.dataBase64 ? f.dataBase64.length * 0.75 : 0), 0);
+  let q = 65;
+  while (size() > TOTAL && q >= 35) {
+    for (const f of out.filter((x) => /^image\//.test(x.mime || '')).sort((a, b) => b.dataBase64.length - a.dataBase64.length)) {
+      try {
+        let img = nativeImage.createFromBuffer(Buffer.from(f.dataBase64, 'base64'));
+        const { width, height } = img.getSize();
+        if (Math.max(width, height) > 1400) img = img.resize({ [width >= height ? 'width' : 'height']: 1400, quality: 'best' });
+        f.mime = 'image/jpeg'; f.dataBase64 = img.toJPEG(q).toString('base64');
+      } catch { /* そのまま */ }
+      if (size() <= TOTAL) break;
+    }
+    q -= 15;
+  }
+  if (size() > TOTAL) throw new Error(`添付が大きすぎます (合計 ${Math.round(size() / 1048576)}MB)。画像か PDF を減らしてください (上限はおよそ 40MB)`);
+  return out;
+}
 const os = require('os');
 const readline = require('readline');
 
@@ -601,7 +640,7 @@ app.whenReady().then(async () => {
     let max = Math.min(maxTokens || 8000, 128000);
     const level = effortOf(pv.kind, effort);
     const search = !!webSearch;
-    const files = (attachments || []).filter((a) => a.dataBase64);
+    const files = shrinkImages((attachments || []).filter((a) => a.dataBase64));
     // 添付 (画像・PDF) を、それぞれの API の形にする
     const userContent = (kind) => {
       if (!files.length) return kind === 'gemini' ? [{ text: prompt }] : prompt;
