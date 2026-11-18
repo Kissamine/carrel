@@ -3541,35 +3541,38 @@ async function boot() {
   }
   // 指示欄に貼った画像はそのまま資料に
   el('aiPrompt').addEventListener('paste', async (e) => {
-    const items = [...(e.clipboardData ? e.clipboardData.items : [])];
-    const shots = items.filter((it) => it.kind === 'file' && /^image\//.test(it.type));
-    if (!shots.length) {
-      // Finder で ⌘C したファイル (複数可) は file:// の一覧で来る。中身は本体に読んでもらう
-      // Finder で ⌘C したファイル (複数可)。renderer に渡る clipboardData は先頭の 1 件しか持たないことがあるので、
-      // 本体にペーストボードの一覧を読んでもらう (zip は中の画像・PDF を取り出す)
-      const paths = await window.anki.clipboardFiles().catch(() => []);
-      if (paths.length) {
-        e.preventDefault();
-        const read = await window.anki.readFilePaths(paths).catch(() => []);
-        pushFiles(read);
+    // 貼り付けの中身は、ここで同期的に (await より前に) すべて取り出す。
+    // await を挟むとブラウザが clipboardData を無効にし、2 件目以降の File が空になる
+    // (以前はこのせいで、複数をコピーしても先頭の 1 枚しか入らなかった)
+    const cd = e.clipboardData;
+    const fileObjs = cd ? [...cd.files] : [];
+    const plain = cd ? cd.getData('text/plain') : '';
+    // ファイルなら、まず本体側でパスから読む (zip の展開や大きさの確認も同じ処理に)
+    const pathsFromPage = fileObjs.map((f) => (window.anki.pathForFile ? window.anki.pathForFile(f) : '')).filter(Boolean);
+    if (fileObjs.length) {
+      e.preventDefault();
+      if (pathsFromPage.length === fileObjs.length) {
+        pushFiles(await window.anki.readFilePaths(pathsFromPage).catch(() => []));
         return;
       }
-      // 飾りは持ち込まず、文字だけ入れる
-      e.preventDefault();
-      const plain = e.clipboardData.getData('text/plain');
-      document.execCommand('insertText', false, plain);
+      // パスが取れない貼り付け (スクリーンショットの画像など) は中身を直接読む
+      const list = [];
+      for (const f of fileObjs) {
+        if (!/^(image\/|application\/pdf)/.test(f.type)) { toast(`${f.name || 'ファイル'} は画像か PDF ではありません`); continue; }
+        const buf = new Uint8Array(await f.arrayBuffer());
+        let bin = '';
+        for (let k = 0; k < buf.length; k += 8192) bin += String.fromCharCode.apply(null, buf.subarray(k, k + 8192));
+        list.push({ name: f.name || `貼り付け画像 ${aiAttachments.length + list.length + 1}`, mime: f.type, size: f.size, dataBase64: btoa(bin) });
+      }
+      pushFiles(list);
       return;
     }
+    // ページにファイルが来ない場合 (古い形式のコピーなど) は、本体で OS のペーストボードを読む
     e.preventDefault();
-    for (const it of shots) {
-      const f = it.getAsFile();
-      if (!f) continue;
-      const buf = new Uint8Array(await f.arrayBuffer());
-      let bin = '';
-      for (let k = 0; k < buf.length; k += 8192) bin += String.fromCharCode.apply(null, buf.subarray(k, k + 8192));
-      aiAttachments.push({ kind: 'file', name: f.name || `貼り付け画像 ${aiAttachments.length + 1}`, mime: f.type, dataBase64: btoa(bin) });
-    }
-    renderAttachments();
+    const paths = await window.anki.clipboardFiles().catch(() => []);
+    if (paths.length) { pushFiles(await window.anki.readFilePaths(paths).catch(() => [])); return; }
+    // 飾りは持ち込まず、文字だけ入れる
+    document.execCommand('insertText', false, plain);
   });
   // 指示欄の URL は、書いた時点で資料として読み込む (チップで見える)
   let urlTimer = null;
@@ -3920,7 +3923,8 @@ async function boot() {
     ` / タグ高さ ${el('tags').getBoundingClientRect().height}`);
   console.log('[persist] 前回の記録 = ' + prefs.getItem('persistProbe'));
   prefs.setItem('persistProbe', new Date().toISOString());
-  if (location.search.includes('selftest')) setTimeout(selfTest, 1500);   // 復元が終わってから
+  if (location.search.includes('selftest&paste')) setTimeout(pasteSelfTest, 1500);
+  else if (location.search.includes('selftest')) setTimeout(selfTest, 1500);   // 復元が終わってから
 }
 
 /** 未ログインなら、最初の画面でログインへ誘導する */
@@ -4111,6 +4115,25 @@ window.addEventListener('unhandledrejection', (e) => {
   const why = e.reason && (e.reason.message || String(e.reason));
   try { window.anki.mark('未処理の失敗: ' + why); } catch { /* 記録できなくても進む */ }
 });
+
+/** 本物の貼り付け (OS のクリップボード → ⌘V と同じ経路) で、AI の資料に何件入るかを数える */
+async function pasteSelfTest() {
+  try {
+    openAi();
+    await new Promise((r) => setTimeout(r, 500));
+    aiAttachments = []; renderAttachments();
+    el('aiPrompt').focus();
+    await window.anki.testPaste();
+    await new Promise((r) => setTimeout(r, 3000));
+    const files = aiAttachments.filter((a) => a.kind === 'file');
+    const chips = document.querySelectorAll('#aiAttachList .chip-file').length;
+    const line = `files=${files.length} chips=${chips} names=${files.map((f) => f.name).join('|')} sizes=${files.map((f) => f.dataBase64.length).join('|')}`;
+    console.log('[paste-test] ' + line);
+    await window.anki.testResult(line);
+  } catch (e) {
+    await window.anki.testResult('error ' + e.message);
+  }
+}
 
 async function selfTest() {
   try {

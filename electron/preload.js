@@ -11,6 +11,8 @@ contextBridge.exposeInMainWorld('anki', {
   clipboardText: () => ipcRenderer.invoke('clipboard:text'),
   readFileUris: (uris) => ipcRenderer.invoke('files:readUris', uris),
   clipboardFiles: () => ipcRenderer.invoke('clipboard:files'),
+  testPaste: () => ipcRenderer.invoke('test:paste'),
+  testResult: (t) => ipcRenderer.invoke('test:result', t),
   pathForFile: (f) => { try { return require('electron').webUtils.getPathForFile(f); } catch { return f.path || ''; } },
   readFilePaths: (paths) => ipcRenderer.invoke('files:readPaths', paths),
   aiList: () => ipcRenderer.invoke('ai:list'),

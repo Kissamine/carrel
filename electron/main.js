@@ -228,7 +228,7 @@ function createWindow() {
   win.on('blur', () => { if (!win.isDestroyed()) win.webContents.send('window-blur'); });
   win.on('focus', () => { if (!win.isDestroyed()) win.webContents.send('window-focus'); });
   const query = process.env.ANKI_SELFTEST
-    ? (process.env.ANKI_SELFTEST === 'small' ? '?selftest&small' : '?selftest')
+    ? (process.env.ANKI_SELFTEST === 'small' ? '?selftest&small' : process.env.ANKI_SELFTEST === 'paste' ? '?selftest&paste' : '?selftest')
     : '';
   win.loadURL('app://ui/index.html' + query);
   return win;
@@ -903,20 +903,33 @@ app.whenReady().then(async () => {
       aiAbort = null;
     }
   });
+  // 自己テスト用: OS のクリップボードを、実際の ⌘V と同じ経路で画面に貼り付ける
+  ipcMain.handle('test:paste', () => { if (process.env.ANKI_SELFTEST && mainWindow) mainWindow.webContents.paste(); });
+  ipcMain.handle('test:result', (_e, text) => {
+    if (!process.env.ANKI_SELFTEST) return;
+    fs.writeFileSync(path.join(require('os').tmpdir(), 'carrel-selftest.txt'), String(text));
+  });
   ipcMain.handle('clipboard:text', () => require('electron').clipboard.readText());
   // Finder で ⌘C したファイルの一覧。renderer 側の clipboardData は先頭 1 件しか渡さないことがあるので、
   // macOS のペーストボード (NSFilenamesPboardType) を本体で読む
   ipcMain.handle('clipboard:files', () => {
-    const { clipboard } = require('electron');
-    const out = [];
+    // Finder で ⌘C したファイルの一覧を、macOS のペーストボードの各項目から読む。
+    // (Electron 44 の clipboard.read は Promise を返し形式も変わったので、OS の API を JXA で直接呼ぶ)
+    const script = [
+      'ObjC.import("AppKit");',
+      'const items = $.NSPasteboard.generalPasteboard.pasteboardItems; const out = [];',
+      'for (let i = 0; i < items.count; i++) {',
+      '  const s = items.objectAtIndex(i).stringForType("public.file-url");',
+      '  if (!s || s.isNil()) continue;',
+      '  const u = $.NSURL.URLWithString(s);',
+      '  if (u && !u.isNil() && u.isFileURL) out.push(ObjC.unwrap(u.path));',
+      '}',
+      'JSON.stringify(out);',
+    ].join('\n');
     try {
-      const plist = clipboard.read('NSFilenamesPboardType');
-      if (plist) for (const m of plist.matchAll(/<string>([^<]+)<\/string>/g)) out.push(m[1].replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>'));
-    } catch { /* 無ければ空 */ }
-    if (!out.length) {
-      try { const u = clipboard.read('public.file-url'); if (u) out.push(decodeURIComponent(new URL(u).pathname)); } catch { /* 無ければ空 */ }
-    }
-    return out.filter((p) => fs.existsSync(p));
+      const raw = require('child_process').execFileSync('/usr/bin/osascript', ['-l', 'JavaScript', '-e', script], { encoding: 'utf8', timeout: 3000 });
+      return JSON.parse(raw.trim() || '[]').filter((p) => fs.existsSync(p));
+    } catch { return []; }
   });
   // パスの一覧から、画像・PDF (zip の中身も) を読む
   const FILE_LIMIT = 100 * 1048576;
